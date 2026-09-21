@@ -70,7 +70,8 @@ Three independent publishers, one dumb server, one page. A publisher going dark 
 ```
 crew:users                    SET    of user ids
 user:<id>:profile             JSON   {displayName, tz, joinedAt}
-user:<id>:day:<YYYY-MM-DD>    JSON   {reviews, minutes, newCards,
+user:<id>:days                HASH   field = "YYYY-MM-DD"
+                                     value = JSON {reviews, minutes, newCards,
                                       ease1, ease2, ease3, ease4,
                                       perDeck: {deckName: count}}
 user:<id>:meta                JSON   {lastPublishAt, streak, allTimeReviews,
@@ -99,7 +100,9 @@ feed:engaged                  SET    of feed item ids exempt from capping
 
 **Retention is derived, never stored.** `ease1` is a lapse; `ease2` through `ease4` are passes. Retention, "percent correct on mature cards", and any future metric are computed in the web app from the stored daily rows.
 
-**Day rows are overwritten by date on re-publish.** This makes the publisher idempotent: a PC that was off for two days is backfilled by the next run rather than leaving holes.
+**One hash per person, not one key per day.** Upstash bills per command, and a key-per-day model would cost one write per day per publish — roughly 800 writes an hour for JP alone, which blows through the free tier immediately. A single hash means the *entire* history is written in one `HSET`.
+
+**Every run publishes the full history**, and day fields are overwritten by date. There is no incremental window, no local state file tracking what was last sent, and therefore no way for the publisher and the server to disagree. A PC that was off for two days self-heals on the next run because the next run sends everything. This is both simpler and cheaper than an incremental protocol.
 
 **Streak lives in `meta` rather than being derived.** Unlike retention, a streak depends on that collection's local rollover hour, which only the publisher knows. Computing it server-side would require the web app to model three participants' day boundaries; computing it publisher-side is a few lines against data already in hand.
 
@@ -117,14 +120,14 @@ Python 3, **standard library only**, cross-platform. Derived from `anki-progress
    Multiple profiles: prompt at setup, store the chosen path in config.
 2. **Copy** to a temp path, open the copy read-only via `sqlite3`. Anki may be running; the original is never opened or locked.
 3. **Read `revlog`**, filtering to `type IN (0,1,2)` per D2.
-4. **Bucket into local days** using the collection's rollover hour from `col.conf` (default 4), per D3.
+4. **Bucket into local days** using the collection's rollover hour, per D3. On schema 18 this lives in the `config` table under key `rollover` as a JSON-encoded byte string (JP's reads `b'4'`) — **not** in `col.conf`, which is an empty string on modern collections. Default to 4 when absent.
 5. **Aggregate per day:** review count, total milliseconds converted to minutes, new cards (distinct cards whose first-ever review falls on that day), ease1 through ease4 counts, and a per-deck count.
-6. **Extract feed cards** for recent reviews: join `revlog` to `cards` to `notes`, resolve deck names (handling both the modern `decks` table and the legacy `col.decks` JSON blob, since JP's install is frozen at an older version), strip HTML from note fields, take the first two non-empty fields as front and back, truncate to a sane length.
+6. **Extract feed cards** for recent reviews: join `revlog` to `cards` to `notes`, resolve deck names from the `decks` table, strip HTML from note fields, take the first two non-empty fields as front and back, truncate to a sane length.
 7. **POST** to `/api/ingest` with that participant's bearer token.
 
-**First run backfills the entire revlog**, not just the trailing window — it is the same query. Day one therefore shows every participant's full history and real streaks before anyone studies a single new card. This matters specifically for a participant who is not yet sold: they open the link and see their own years of history, not an empty table.
+**Schema floor: collection version 18 or newer**, which means Anki 2.1.28 (2020) or later. JP's frozen install is version 18 and has the modern `decks`, `fields`, `templates`, `notetypes`, and `config` tables, so no legacy compatibility layer is needed. Older collections are detected and rejected with a message naming the version found and the minimum required — a clear error beats speculative support for a schema nobody in the group is running.
 
-**Subsequent runs** publish the trailing 30 days, which corrects any recent gaps.
+**Every run publishes the entire revlog history**, so day one shows every participant's full history and real streaks before anyone studies a single new card. This matters specifically for a participant who is not yet sold: they open the link and see their own years of history, not an empty table. It also means there is no first-run/subsequent-run distinction to get wrong.
 
 **Setup (`setup.py`):** detect collection, prompt for display name and ingest token, write `config.json` (gitignored), then install the hourly schedule. On Windows it installs the `schtasks` entry; on macOS and Linux it prints the `launchd` or `cron` line rather than installing magic behind an engineer's back.
 
@@ -140,7 +143,7 @@ Tokens map server-side to user ids via a single environment variable holding a J
   "displayName": "JP",
   "tz": "America/New_York",
   "generatedAt": 1758412345678,
-  "days": [{ "date": "2026-09-21", "reviews": 143, "minutes": 22.4,
+  "days": [{ "//": "full history, every run", "date": "2026-09-21", "reviews": 143, "minutes": 22.4,
              "newCards": 20, "ease1": 18, "ease2": 9, "ease3": 96,
              "ease4": 20, "perDeck": { "Core 2k/6k": 143 } }],
   "allTime": { "reviews": 48201, "firstReviewAt": 1600000000000 },
@@ -148,7 +151,7 @@ Tokens map server-side to user ids via a single environment variable holding a J
 }
 ```
 
-The server validates the token, rejects a mismatched `user`, writes day rows, upserts profile and meta, merges feed items (`ZADD`; the deterministic id makes this idempotent), then trims `feed` to 500 entries **excluding anything in `feed:engaged`**.
+The server validates the token, rejects a mismatched `user`, writes all day fields in one `HSET`, upserts profile and meta, merges feed items (`ZADD`; the deterministic id makes this idempotent), then trims `feed` to 500 entries **excluding anything in `feed:engaged`**.
 
 **`GET /api/crew?key=<READ_KEY>`**
 
