@@ -31,6 +31,29 @@ Once you're running hourly, each teammate can see, per person:
 
 That last one is the actual point of the feed — you'll see the real Japanese your teammates are studying, not just a number going up. If that's not something you want to share, say so before running `setup.py`.
 
+## Deploying the dashboard
+
+The web app needs four environment variables, documented in `web/.env.example`.
+Set them on the Vercel project (and in `web/.env.local` for local development):
+
+| Name | What it is |
+| --- | --- |
+| `INGEST_TOKENS` | JSON object mapping ingest token -> user id, e.g. `{"<token>":"jp"}`. One entry per person. |
+| `READ_KEYS` | JSON object mapping read key -> user id. The key is the `?key=` in that person's dashboard link. |
+| `KV_REST_API_URL` | Upstash Redis REST URL. The Vercel Upstash integration sets this for you. |
+| `KV_REST_API_TOKEN` | Upstash Redis REST token, likewise. |
+
+**Every token and key must be generated, never chosen.** The whole security
+model is that the links are unguessable, so `?key=jp` would hand the dashboard
+to anyone who tried it. Generate each one with `openssl rand -hex 16` or
+`python -c "import secrets; print(secrets.token_hex(16))"`, and send each
+person their own over a private channel.
+
+All four are read at runtime, so rotating a token or key is an env var edit plus
+a redeploy. None of them is needed at build time: `@upstash/redis` only warns
+about missing config rather than throwing, so `next build` succeeds without a
+database attached.
+
 ## Your dashboard
 
 `<dashboard-url>/?key=<your-read-key>` — we'll send you your personal link once the dashboard is deployed.
