@@ -81,13 +81,27 @@ export async function getPerson(id: string): Promise<PersonView | null> {
   const rawMeta = await redis.get(metaKey(id));
   if (!rawProfile || !rawMeta) return null;
   const hash = await redis.hgetall<Record<string, unknown>>(daysKey(id));
+  // Belt and braces: the ingest route rejects dateless rows now, but a row
+  // written before it did is undeletable, and sorting it would throw and 500
+  // the dashboard for all three viewers on every load.
   const days: DayRow[] = hash
-    ? Object.values(hash).map((v) => parse<DayRow>(v)).sort((a, b) => a.date.localeCompare(b.date))
+    ? Object.values(hash).map((v) => parse<DayRow>(v))
+        .filter((d) => typeof d?.date === "string")
+        .sort((a, b) => a.date.localeCompare(b.date))
     : [];
   return { profile: parse<Profile>(rawProfile), meta: parse<Meta>(rawMeta), days };
 }
 
 export async function getFeed(limit = FEED_CAP): Promise<FeedItem[]> {
   const raw = await redis.zrange<string[]>(FEED, 0, limit - 1, { rev: true });
-  return raw.map((r) => parse<FeedItem>(r));
+  // The whole serialized item is the ZSET member, so a card republished with
+  // changed content (a fixed typo, a moved deck, a "Set Due Date" that alters
+  // ivl) is stored twice under one id. Descending score means the first
+  // occurrence of an id is the newest, so later ones are dropped.
+  const byId = new Map<string, FeedItem>();
+  for (const r of raw) {
+    const item = parse<FeedItem>(r);
+    if (!byId.has(item.id)) byId.set(item.id, item);
+  }
+  return [...byId.values()];
 }

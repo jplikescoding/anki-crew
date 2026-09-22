@@ -115,6 +115,26 @@ describe("store", () => {
     expect(await getFeed()).toHaveLength(1);
   });
 
+  it("survives a day row already in Redis that has no date", async () => {
+    // Before the ingest predicate validated day rows, a row without a date was
+    // written under the hash field "undefined"; reading it threw on
+    // a.date.localeCompare and 500d /api/crew for everyone, with no delete path.
+    await saveSnapshot(body());
+    state.hashes.get("user:jp:days")!.set("undefined", JSON.stringify({ reviews: 3 }));
+    const person = await getPerson("jp");
+    expect(person?.days.map((d) => d.date)).toEqual(["2026-09-21"]);
+  });
+
+  it("keeps one item per id when the same card was published twice with different content", async () => {
+    // "Set Due Date" changes cards.ivl, so the same revlog id republishes with
+    // different content. The member differs byte-wise; the id does not.
+    await saveSnapshot(body({ recentCards: [card("jp:1", 1)] }));
+    await saveSnapshot(body({ recentCards: [{ ...card("jp:1", 2), ivl: 99 }] }));
+    const feed = await getFeed();
+    expect(feed).toHaveLength(1);
+    expect(feed[0].ivl).toBe(99);
+  });
+
   it("trims the feed to the cap", async () => {
     const many = Array.from({ length: FEED_CAP + 20 }, (_, i) => card(`jp:${i}`, i));
     await saveSnapshot(body({ recentCards: many }));
