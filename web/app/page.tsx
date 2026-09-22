@@ -59,6 +59,12 @@ export default function Page() {
 
       {tab === "feed" && <Feed items={data.feed} people={data.people} />}
 
+      {tab === "person" && !selected && (
+        <p className="px-4 py-12 text-center text-sm text-neutral-400">
+          Nobody has published yet. Run the publisher and refresh.
+        </p>
+      )}
+
       {tab === "person" && selected && (
         <>
           <div className="flex gap-1 px-4 pt-3 text-xs">

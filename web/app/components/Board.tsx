@@ -7,11 +7,17 @@ export type Range = "today" | "week" | "all";
 
 const STALE_AFTER_MS = 1000 * 60 * 60 * 6;
 
-function tzTag(tz: string): string | null {
-  if (tz.includes("Los_Angeles") || tz.includes("Pacific")) return "PST";
-  if (tz.includes("Denver") || tz.includes("Mountain")) return "MST";
-  if (tz.includes("Chicago") || tz.includes("Central")) return "CST";
-  return null;
+// Seasonal abbreviation for that person's current day -- "PDT" in September,
+// "PST" in January. Returns null for a zone Intl does not know, including the
+// literal "local" that setup.py writes when nobody typed a timezone.
+function tzTag(tz: string, dateKey: string): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+      .formatToParts(new Date(dateKey));
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function daysFor(person: PersonView, range: Range): DayRow[] {
@@ -47,6 +53,10 @@ export default function Board({ people, viewer, range }:
 
   const ranked = rankBy(people, (p) => totals(daysFor(p, range)).reviews);
   const now = Date.now();
+  // The viewer's own zone is home and goes untagged; only the people whose
+  // clocks differ from the reader's carry one.
+  const home = people.find((p) => p.profile.id === viewer) ?? people[0];
+  const homeTag = tzTag(home.profile.tz, home.meta.todayKey);
 
   return (
     <table className="w-full border-collapse text-sm">
@@ -66,7 +76,8 @@ export default function Board({ people, viewer, range }:
           const scoped = daysFor(p, range);
           const sums = totals(scoped);
           const ret = retention(scoped);
-          const tag = tzTag(p.profile.tz);
+          const abbr = tzTag(p.profile.tz, p.meta.todayKey);
+          const tag = abbr === homeTag ? null : abbr;
           const stale = now - p.meta.lastPublishAt > STALE_AFTER_MS;
           const you = p.profile.id === viewer;
           return (

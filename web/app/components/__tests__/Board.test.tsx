@@ -34,10 +34,17 @@ describe("Board", () => {
     expect(screen.getByTestId("row-andy")).toHaveAttribute("data-you", "false");
   });
 
-  it("tags a participant in a different timezone", () => {
+  it("tags a participant in a different timezone, with the seasonal abbreviation", () => {
+    // todayKey is in September, so Los Angeles is on daylight time: PDT, not PST.
     render(<Board people={[JP, ANDY]} viewer="jp" range="today" />);
-    expect(within(screen.getByTestId("row-andy")).getByText("PST")).toBeTruthy();
-    expect(within(screen.getByTestId("row-jp")).queryByText("PST")).toBeNull();
+    expect(within(screen.getByTestId("row-andy")).getByText("PDT")).toBeTruthy();
+    expect(within(screen.getByTestId("row-jp")).queryByText(/PDT|PST|EDT|EST/)).toBeNull();
+  });
+
+  it("tags nobody when everyone shares the viewer's zone", () => {
+    const sameZone = person("sam", "Sam", "America/New_York", [day("2026-09-21", { reviews: 5 })]);
+    render(<Board people={[JP, sameZone]} viewer="jp" range="today" />);
+    expect(screen.queryByText(/EDT|EST/)).toBeNull();
   });
 
   it("shows a dash rather than 0% when nothing has been graded", () => {
