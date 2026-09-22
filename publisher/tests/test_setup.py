@@ -24,6 +24,22 @@ class TestScheduleCommand(unittest.TestCase):
         self.assertIn("/sc hourly", cmd.lower())
         self.assertIn("AnkiCrewPublish", cmd)
 
+    def test_windows_prefers_pythonw_so_no_console_flashes_hourly(self):
+        # A console window popping up every hour is what gets the task disabled.
+        bindir = tempfile.mkdtemp()
+        open(os.path.join(bindir, "pythonw.exe"), "wb").close()
+        with mock.patch.object(S.sys, "platform", "win32"):
+            cmd = S.schedule_command(os.path.join(bindir, "python.exe"), bindir)
+        self.assertIn("pythonw.exe", cmd)
+
+    def test_windows_falls_back_when_pythonw_is_absent(self):
+        bindir = tempfile.mkdtemp()
+        exe = os.path.join(bindir, "python.exe")
+        with mock.patch.object(S.sys, "platform", "win32"):
+            cmd = S.schedule_command(exe, bindir)
+        self.assertIn(exe, cmd)
+        self.assertNotIn("pythonw.exe", cmd)
+
     def test_unix_prints_a_cron_line(self):
         with mock.patch.object(S.sys, "platform", "darwin"):
             cmd = S.schedule_command("/usr/bin/python3", "/home/x/anki-crew/publisher")

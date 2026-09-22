@@ -1,4 +1,4 @@
-import json, os, tempfile, unittest
+import io, json, os, tempfile, unittest
 from datetime import datetime
 from unittest import mock
 from tests.fixtures import build_db, add_deck, add_note, add_card, add_review, set_config, ms
@@ -75,6 +75,23 @@ class TestPostPayload(unittest.TestCase):
         self.assertEqual(captured["url"], "https://x.test/api/ingest")
         self.assertEqual(captured["auth"], "Bearer tok")
         self.assertEqual(captured["body"], {"user": "jp"})
+
+
+class TestUnreadableCollection(unittest.TestCase):
+    def test_missing_collection_prints_the_path_and_returns_its_own_code(self):
+        # An hourly headless task must not end in a shutil traceback.
+        tmp = tempfile.mkdtemp()
+        missing = os.path.join(tmp, "collection.anki2")
+        cfg_path = os.path.join(tmp, "config.json")
+        with open(cfg_path, "w", encoding="utf-8") as fh:
+            json.dump({"user": "jp", "displayName": "JP", "endpoint": "https://x.test",
+                       "token": "t", "collection": missing}, fh)
+        err = io.StringIO()
+        with mock.patch.object(P.sys, "stderr", err):
+            code = P.main(["--config", cfg_path, "--dry-run"])
+        self.assertEqual(code, P.EXIT_UNREADABLE_COLLECTION)
+        self.assertNotIn(code, (0, 2, 3, 4))
+        self.assertIn(missing, err.getvalue())
 
 
 class TestLoadConfig(unittest.TestCase):

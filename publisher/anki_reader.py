@@ -26,13 +26,19 @@ def open_collection_copy(src):
     yet in the main database file.
     """
     tmpdir = tempfile.mkdtemp(prefix="ankicrew-")
-    dst = os.path.join(tmpdir, "collection.anki2")
-    shutil.copy2(src, dst)
-    for suffix in _WAL_SIBLINGS:
-        sibling = str(src) + suffix
-        if os.path.exists(sibling):
-            shutil.copy2(sibling, dst + suffix)
-    return sqlite3.connect(dst), tmpdir
+    try:
+        dst = os.path.join(tmpdir, "collection.anki2")
+        shutil.copy2(src, dst)
+        for suffix in _WAL_SIBLINGS:
+            sibling = str(src) + suffix
+            if os.path.exists(sibling):
+                shutil.copy2(sibling, dst + suffix)
+        return sqlite3.connect(dst), tmpdir
+    except Exception:
+        # Nobody holds tmpdir yet, so an hourly task that fails here would
+        # otherwise leave one behind on every run.
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise
 
 
 def check_schema(con):

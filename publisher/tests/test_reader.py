@@ -1,4 +1,4 @@
-import os, shutil, tempfile, unittest
+import glob, os, shutil, tempfile, unittest
 from tests.fixtures import build_db, add_deck, set_config, set_schema_version
 import anki_reader as R
 
@@ -76,6 +76,15 @@ class TestOpenCopy(unittest.TestCase):
         finally:
             copy_con.close()
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_a_failed_copy_leaves_no_temp_directory_behind(self):
+        # The hourly task would otherwise litter a tmpdir on every run whose
+        # collection path is wrong or locked.
+        pattern = os.path.join(tempfile.gettempdir(), "ankicrew-*")
+        before = set(glob.glob(pattern))
+        with self.assertRaises(OSError):
+            R.open_collection_copy(os.path.join(tempfile.mkdtemp(), "missing.anki2"))
+        self.assertEqual(set(glob.glob(pattern)) - before, set())
 
     def test_copies_wal_sibling_when_present(self):
         src = _path()

@@ -20,6 +20,8 @@ from collection_paths import find_collections
 from daybuckets import today_key
 
 REQUIRED_KEYS = ("user", "displayName", "endpoint", "token")
+# Exit codes: 2 config, 3 schema, 4 network.
+EXIT_UNREADABLE_COLLECTION = 5
 DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 
@@ -93,7 +95,12 @@ def main(argv=None):
         print("config error: %s" % exc, file=sys.stderr)
         return 2
 
-    con, tmpdir = anki_reader.open_collection_copy(src)
+    try:
+        con, tmpdir = anki_reader.open_collection_copy(src)
+    except OSError as exc:
+        print("cannot read collection at %s: %s" % (src, exc), file=sys.stderr)
+        return EXIT_UNREADABLE_COLLECTION
+
     try:
         anki_reader.check_schema(con)
         rollover = anki_reader.rollover_hour(con)
