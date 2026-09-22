@@ -1,0 +1,10 @@
+.superpowers/
+__pycache__/
+*.pyc
+publisher/config.json
+node_modules/
+.next/
+.vercel/
+.env*.local
+next-env.d.ts
+*.tsbuildinfo

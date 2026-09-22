@@ -1,0 +1,8 @@
+{
+  "user": "jp",
+  "displayName": "JP",
+  "tz": "America/New_York",
+  "endpoint": "https://anki-crew.vercel.app/api/ingest",
+  "token": "replace-with-your-ingest-token",
+  "collection": ""
+}
