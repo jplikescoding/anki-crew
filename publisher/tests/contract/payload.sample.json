@@ -1,0 +1,34 @@
+{
+  "user": "jp",
+  "displayName": "JP",
+  "tz": "America/New_York",
+  "generatedAt": 1758412345678,
+  "todayKey": "2026-09-21",
+  "streak": 7,
+  "days": [
+    {
+      "date": "2026-09-21",
+      "reviews": 143,
+      "minutes": 22.4,
+      "newCards": 20,
+      "ease1": 18,
+      "ease2": 9,
+      "ease3": 96,
+      "ease4": 20,
+      "perDeck": { "Core 2k/6k": 143 }
+    }
+  ],
+  "allTime": { "reviews": 48201, "firstReviewAt": 1600000000000 },
+  "recentCards": [
+    {
+      "id": "jp:1758412345678",
+      "user": "jp",
+      "front": "話しかける",
+      "back": "to speak to, to address",
+      "deck": "Core 2k/6k",
+      "ease": 3,
+      "ivl": 21,
+      "ts": 1758412345678
+    }
+  ]
+}
