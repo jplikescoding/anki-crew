@@ -46,10 +46,10 @@ export async function saveSnapshot(body: IngestBody): Promise<void> {
   }
 
   if (body.recentCards.length > 0) {
-    await redis.zadd(
-      FEED,
-      ...body.recentCards.map((c) => ({ score: c.ts, member: JSON.stringify({ ...c, user: id }) })),
+    const [first, ...rest] = body.recentCards.map(
+      (c) => ({ score: c.ts, member: JSON.stringify({ ...c, user: id }) }),
     );
+    await redis.zadd(FEED, first, ...rest);
     await trimFeed();
   }
 }
