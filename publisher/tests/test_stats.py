@@ -80,6 +80,19 @@ class TestDailyRows(unittest.TestCase):
         self.assertEqual([r["date"] for r in S.daily_rows(con, 4, DECKS)],
                          ["2026-09-19", "2026-09-21"])
 
+    def test_orphaned_revlog_rows_still_reach_the_daily_totals(self):
+        # Anki does not purge revlog when a card is deleted, so a collection
+        # with deletion history has revlog rows whose cid matches no card. If
+        # the daily query drops them but all_time keeps them, the Board's
+        # all-time column disagrees with the Person panel on the same screen.
+        con = _seeded()
+        add_review(con, ms(datetime(2026, 9, 21, 10, 0)), 200, rtype=0)
+        add_review(con, ms(datetime(2026, 9, 21, 10, 1)), 999, rtype=0)
+        rows = S.daily_rows(con, 4, DECKS)
+        self.assertEqual(sum(r["reviews"] for r in rows), S.all_time(con)["reviews"])
+        for row in rows:
+            self.assertLessEqual(row["newCards"], row["reviews"])
+
     def test_unknown_deck_id_does_not_crash(self):
         con = _seeded()
         add_card(con, 202, 100, 999)

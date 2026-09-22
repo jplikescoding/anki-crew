@@ -19,8 +19,11 @@ _EMPTY = {"reviews": 0, "newCards": 0,
 
 def daily_rows(con, rollover, decks):
     buckets = {}
+    # LEFT JOIN, because Anki keeps revlog rows after a card is deleted. An
+    # inner join would hide those reviews here while all_time still counted
+    # them, so the daily rows and the all-time total must span the same rows.
     query = ("SELECT r.id, r.ease, r.time, c.did FROM revlog r "
-             "JOIN cards c ON c.id = r.cid WHERE r.type IN %s" % REAL_TYPES)
+             "LEFT JOIN cards c ON c.id = r.cid WHERE r.type IN %s" % REAL_TYPES)
     for rid, ease, time_ms, did in con.execute(query):
         key = day_key(rid, rollover)
         row = buckets.get(key)
