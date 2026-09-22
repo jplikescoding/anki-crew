@@ -1,1 +1,8 @@
 .superpowers/
+__pycache__/
+*.pyc
+publisher/config.json
+node_modules/
+.next/
+.vercel/
+.env*.local
