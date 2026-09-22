@@ -3,11 +3,15 @@ import { useMemo, useState } from "react";
 import type { FeedItem, PersonView } from "@/lib/types";
 
 function ago(ts: number, now: number): string {
-  const mins = Math.max(0, Math.round((now - ts) / 60000));
+  const ms = Math.max(0, now - ts);
+  const mins = Math.round(ms / 60000);
   if (mins < 60) return `${mins}m`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
+  if (ms < 24 * 60 * 60 * 1000) {
+    const hours = Math.round(ms / 3600000);
+    return `${hours}h`;
+  }
+  const days = Math.round(ms / 86400000);
+  return `${days}d`;
 }
 
 export default function Feed({ items, people }: { items: FeedItem[]; people: PersonView[] }) {
@@ -24,6 +28,7 @@ export default function Feed({ items, people }: { items: FeedItem[]; people: Per
         {people.map((p) => (
           <button key={p.profile.id} data-testid={`chip-${p.profile.id}`}
                   onClick={() => setOnly(only === p.profile.id ? null : p.profile.id)}
+                  aria-pressed={only === p.profile.id}
                   className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                     only === p.profile.id
                       ? "border-sky-400 bg-sky-500/20 text-sky-200"

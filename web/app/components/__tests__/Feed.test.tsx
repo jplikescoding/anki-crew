@@ -59,4 +59,48 @@ describe("Feed", () => {
     render(<Feed items={[]} people={people} />);
     expect(screen.getByTestId("feed-empty")).toBeTruthy();
   });
+
+  it("exposes aria-pressed state for active chip", () => {
+    render(<Feed items={items} people={people} />);
+    // Initially, no chip is active
+    expect(screen.getByTestId("chip-jp").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("chip-andy").getAttribute("aria-pressed")).toBe("false");
+
+    // Click Andy's chip to activate it
+    fireEvent.click(screen.getByTestId("chip-andy"));
+    expect(screen.getByTestId("chip-andy").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("chip-jp").getAttribute("aria-pressed")).toBe("false");
+
+    // Click Andy's chip again to deactivate it
+    fireEvent.click(screen.getByTestId("chip-andy"));
+    expect(screen.getByTestId("chip-andy").getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
+describe("ago() function", () => {
+  it("formats just under 1 hour", () => {
+    render(<Feed items={[{ id: "test", user: "jp", front: "text", back: "text", deck: "Deck", ease: 3, ivl: 1, ts: Date.now() - 59 * 60000 }]} people={people} />);
+    expect(screen.getByText("59m")).toBeTruthy();
+  });
+
+  it("formats just over 1 hour", () => {
+    render(<Feed items={[{ id: "test", user: "jp", front: "text", back: "text", deck: "Deck", ease: 3, ivl: 1, ts: Date.now() - 61 * 60000 }]} people={people} />);
+    expect(screen.getByText("1h")).toBeTruthy();
+  });
+
+  it("formats ~23.5 hours as hours, not days", () => {
+    render(<Feed items={[{ id: "test", user: "jp", front: "text", back: "text", deck: "Deck", ease: 3, ivl: 1, ts: Date.now() - Math.round(23.5 * 60 * 60 * 1000) }]} people={people} />);
+    expect(screen.getByText("24h")).toBeTruthy();
+    expect(screen.queryByText("1d")).toBeNull();
+  });
+
+  it("formats just over 24 hours as days", () => {
+    render(<Feed items={[{ id: "test", user: "jp", front: "text", back: "text", deck: "Deck", ease: 3, ivl: 1, ts: Date.now() - 25 * 60 * 60 * 1000 }]} people={people} />);
+    expect(screen.getByText("1d")).toBeTruthy();
+  });
+
+  it("formats future timestamp as 0m", () => {
+    render(<Feed items={[{ id: "test", user: "jp", front: "text", back: "text", deck: "Deck", ease: 3, ivl: 1, ts: Date.now() + 1000 }]} people={people} />);
+    expect(screen.getByText("0m")).toBeTruthy();
+  });
 });
