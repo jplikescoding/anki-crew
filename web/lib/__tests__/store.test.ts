@@ -95,6 +95,15 @@ describe("store", () => {
     expect(await getPerson("nobody")).toBeNull();
   });
 
+  it("returns null for a person with profile but no meta (incomplete publish)", async () => {
+    // Simulate an interruption between setting profile and meta
+    const profile = { id: "jp", displayName: "JP", tz: "America/New_York", joinedAt: 100 };
+    const strings = (state as any).strings;
+    strings.set("user:jp:profile", JSON.stringify(profile));
+    // Intentionally don't set user:jp:meta
+    expect(await getPerson("jp")).toBeNull();
+  });
+
   it("merges feed items newest first", async () => {
     await saveSnapshot(body({ recentCards: [card("jp:1", 1), card("jp:3", 3)] }));
     expect((await getFeed()).map((f) => f.id)).toEqual(["jp:3", "jp:1"]);

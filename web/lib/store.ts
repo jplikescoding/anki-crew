@@ -62,6 +62,9 @@ async function trimFeed(): Promise<void> {
   const doomed = all
     .slice(FEED_CAP)
     .filter((raw) => !engaged.has(parse<FeedItem>(raw).id));
+  // Eviction assumes JSON.stringify(JSON.parse(raw)) === raw for each stored member.
+  // The in-memory mock does not exercise this invariant; future shape changes could
+  // silently break feed capping if serialization becomes non-roundtrip-safe.
   if (doomed.length > 0) await redis.zrem(FEED, ...doomed);
 }
 
@@ -75,8 +78,8 @@ export async function listUsers(): Promise<string[]> {
 
 export async function getPerson(id: string): Promise<PersonView | null> {
   const rawProfile = await redis.get(profileKey(id));
-  if (!rawProfile) return null;
   const rawMeta = await redis.get(metaKey(id));
+  if (!rawProfile || !rawMeta) return null;
   const hash = await redis.hgetall<Record<string, unknown>>(daysKey(id));
   const days: DayRow[] = hash
     ? Object.values(hash).map((v) => parse<DayRow>(v)).sort((a, b) => a.date.localeCompare(b.date))
