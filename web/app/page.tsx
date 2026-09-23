@@ -159,6 +159,18 @@ export default function Page() {
           >
             <span className={busy ? "inline-block animate-spin" : "inline-block"}>↻</span>
           </button>
+          {/* The hint bubble is dismissed once and never returns, so shortcuts
+              need a permanent way in. */}
+          <button
+            data-testid="shortcuts-button"
+            onClick={() => setShortcuts(true)}
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts"
+            className="rounded-full px-2.5 py-1.5 text-[13px] font-semibold transition-colors"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            ?
+          </button>
         </div>
       </header>
 
