@@ -62,6 +62,12 @@ class TestScheduleCommand(unittest.TestCase):
         self.assertIn("LaunchAgents", cmd)
         self.assertNotIn("crontab", cmd)
 
+    def test_macos_creates_the_launchagents_folder_first(self):
+        # It does not exist on a fresh Mac; without this the copy fails.
+        with mock.patch.object(S.sys, 'platform', 'darwin'):
+            cmd = S.schedule_command('/usr/bin/python3', '/Users/x/anki-crew/publisher')
+        self.assertTrue(cmd.startswith('mkdir -p ~/Library/LaunchAgents'))
+
     def test_macos_plist_runs_publish_on_change_every_minute(self):
         d = tempfile.mkdtemp()
         with mock.patch.object(S.sys, "platform", "darwin"):

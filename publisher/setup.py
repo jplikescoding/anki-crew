@@ -109,7 +109,10 @@ def schedule_command(python_exe, script_dir):
     if sys.platform == "darwin":
         plist = os.path.join(script_dir, "%s.plist" % AGENT_LABEL)
         target = "~/Library/LaunchAgents/%s.plist" % AGENT_LABEL
-        return 'cp "%s" %s && launchctl load %s' % (plist, target, target)
+        # LaunchAgents does not exist on a fresh Mac, so create it first --
+        # otherwise the copy fails and the person is stuck on step one.
+        return ('mkdir -p ~/Library/LaunchAgents && cp "%s" %s && launchctl load %s'
+                % (plist, target, target))
     publish = os.path.join(script_dir, "publish.py")
     return '* * * * * "%s" "%s" --on-change >/dev/null 2>&1' % (python_exe, publish)
 
