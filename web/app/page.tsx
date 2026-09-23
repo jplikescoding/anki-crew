@@ -34,6 +34,8 @@ export default function Page() {
   const [hint, setHint] = useState(false);
   const [engagement, setEngagement] = useState<Record<string, Engagement>>({});
   const [jumpSignal, setJumpSignal] = useState(0);
+  // A refresh that silently changes nothing reads as a broken button.
+  const [note, setNote] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   // Frozen for the session so highlights do not vanish while you are reading.
   const unreadSince = useRef(0);
@@ -51,6 +53,9 @@ export default function Page() {
       const res = await fetch(`/api/crew?key=${encodeURIComponent(key)}`, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const next: CrewResponse = await res.json();
+      const countAll = (c: CrewResponse) =>
+        c.people.reduce((n, p) => n + todayReviews(p), 0);
+      const gainedNow = data ? countAll(next) - countAll(data) : 0;
 
       if (before.current === null) before.current = readSeen();
       const order = rankBy(next.people, (p) => todayReviews(p)).map((p) => p.profile.id);
@@ -72,6 +77,10 @@ export default function Page() {
         at: Date.now(),
       });
       setError(null);
+      if (data) {
+        setNote(gainedNow > 0 ? `+${gainedNow} new` : "nothing new yet");
+        window.setTimeout(() => setNote(null), 4000);
+      }
     } catch {
       setError("That link isn't valid. Check the key on the end of the URL, or ask JP for yours.");
     } finally {
@@ -79,7 +88,7 @@ export default function Page() {
       const elapsed = Date.now() - startedAt;
       window.setTimeout(() => setSpinning(false), Math.max(0, 720 - elapsed));
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     setApiKey(new URLSearchParams(window.location.search).get("key") ?? "");
@@ -194,6 +203,11 @@ export default function Page() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {note && (
+            <span data-testid="sync-note" className="mr-1 text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
+              {note}
+            </span>
+          )}
           <nav className="flex gap-1 text-[11.5px]">
             {TABS.map((t) => (
               <button
