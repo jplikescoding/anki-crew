@@ -3,6 +3,7 @@ import {
   crewDailyTotals, gapToNext, rankBy, rankDeltas, retention, shiftDays, totals, weekStart, windowFrom,
 } from "@/lib/metrics";
 import type { DayRow, PersonView } from "@/lib/types";
+import { Avatar } from "@/app/components/Avatar";
 import { CountUp, StreakStar, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
 
 export type Range = "today" | "week" | "all";
@@ -146,7 +147,9 @@ export default function Board({
                 </div>
 
                 {/* name + sync state */}
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <Avatar profile={p.profile} size={32} index={people.findIndex((x) => x.profile.id === id)} />
+                  <div className="min-w-0">
                   <div className="flex items-baseline gap-2">
                     <button
                       type="button"
@@ -180,6 +183,7 @@ export default function Board({
                   <div className="mt-[3px] text-[10.5px]" style={{ color: stale ? "var(--gold)" : "var(--ink-faint)" }}>
                     {stale && <span data-testid={`stale-${id}`}>offline · </span>}
                     synced {sinceLabel(p.meta.lastPublishAt)}
+                  </div>
                   </div>
                 </div>
 

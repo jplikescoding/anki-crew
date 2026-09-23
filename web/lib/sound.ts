@@ -1,29 +1,11 @@
 /**
- * A tiny synthesised chime for the two moments that earn one: overtaking
- * someone, and beating your own record.
+ * A short synthesised chime, played when you overtake someone.
  *
- * Deliberately not wired to navigation. A sound you hear thirty times a session
- * gets muted by the end of the week; one you hear twice stays a reward. Off by
- * default either way — nobody's first visit should make a noise.
+ * No preference to turn it off, on purpose: this fires perhaps twice a week, so
+ * a setting for it would be clutter. It is deliberately not wired to hovering
+ * or navigation -- a sound heard thirty times a session gets the whole tab
+ * muted, which would take this one with it.
  */
-const PREF_KEY = "anki-crew:sound:v1";
-
-export function soundEnabled(): boolean {
-  try {
-    return localStorage.getItem(PREF_KEY) === "on";
-  } catch {
-    return false;
-  }
-}
-
-export function setSoundEnabled(on: boolean): void {
-  try {
-    localStorage.setItem(PREF_KEY, on ? "on" : "off");
-  } catch {
-    /* storage blocked; the toggle just won't persist */
-  }
-}
-
 type Ctor = typeof AudioContext;
 
 function audioContext(): AudioContext | null {
@@ -34,7 +16,6 @@ function audioContext(): AudioContext | null {
 
 /** Two notes, a rising interval, ~450ms. Synthesised so there is no asset to load. */
 export function playCelebration(): void {
-  if (!soundEnabled()) return;
   let ctx: AudioContext | null = null;
   try {
     ctx = audioContext();

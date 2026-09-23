@@ -8,7 +8,7 @@ import StatTiles from "@/app/components/StatTiles";
 import { Avatar, AvatarUploader } from "@/app/components/Avatar";
 import { rankBy } from "@/lib/metrics";
 import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
-import { playCelebration, setSoundEnabled, soundEnabled } from "@/lib/sound";
+import { playCelebration } from "@/lib/sound";
 import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "you";
@@ -30,7 +30,6 @@ export default function Page() {
   // Kept true for at least one whole rotation: a 200ms request that stops the
   // icon a fifth of the way round reads as "it didn't work".
   const [spinning, setSpinning] = useState(false);
-  const [sound, setSound] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [hint, setHint] = useState(false);
   const [engagement, setEngagement] = useState<Record<string, Engagement>>({});
@@ -96,7 +95,6 @@ export default function Page() {
 
   useEffect(() => {
     try { if (!localStorage.getItem(HINT_KEY)) setHint(true); } catch { /* storage blocked */ }
-    setSound(soundEnabled());
   }, []);
 
   /** Applied locally first: a reaction that waits on a round trip feels broken. */
@@ -390,21 +388,6 @@ export default function Page() {
                 ),
               )}
             </dl>
-            <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 border-t pt-3 text-[12px]"
-                   style={{ borderColor: "var(--edge)", color: "var(--ink-dim)" }}>
-              <span>
-                Sound on milestones
-                <span className="block text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
-                  Only when you overtake someone. Never on clicks.
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                checked={sound}
-                onChange={(e) => { setSound(e.target.checked); setSoundEnabled(e.target.checked); }}
-                className="h-4 w-4 accent-[color:var(--violet-soft)]"
-              />
-            </label>
           </div>
         </div>
       )}
