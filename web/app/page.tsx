@@ -36,6 +36,7 @@ export default function Page() {
   const [jumpSignal, setJumpSignal] = useState(0);
   // A refresh that silently changes nothing reads as a broken button.
   const [note, setNote] = useState<string | null>(null);
+  const lastTotal = useRef<number | null>(null);
   const [apiKey, setApiKey] = useState("");
   // Frozen for the session so highlights do not vanish while you are reading.
   const unreadSince = useRef(0);
@@ -53,9 +54,12 @@ export default function Page() {
       const res = await fetch(`/api/crew?key=${encodeURIComponent(key)}`, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const next: CrewResponse = await res.json();
-      const countAll = (c: CrewResponse) =>
-        c.people.reduce((n, p) => n + todayReviews(p), 0);
-      const gainedNow = data ? countAll(next) - countAll(data) : 0;
+      // Compared through a ref, not through `data`. Depending on `data` here
+      // would make `load` change identity every time it ran, and the effect
+      // that calls `load` would fire again -- a refresh loop.
+      const total = next.people.reduce((n, p) => n + todayReviews(p), 0);
+      const gainedNow = lastTotal.current === null ? null : total - lastTotal.current;
+      lastTotal.current = total;
 
       if (before.current === null) before.current = readSeen();
       const order = rankBy(next.people, (p) => todayReviews(p)).map((p) => p.profile.id);
@@ -77,7 +81,7 @@ export default function Page() {
         at: Date.now(),
       });
       setError(null);
-      if (data) {
+      if (gainedNow !== null) {
         setNote(gainedNow > 0 ? `+${gainedNow} new` : "nothing new yet");
         window.setTimeout(() => setNote(null), 4000);
       }
@@ -88,7 +92,7 @@ export default function Page() {
       const elapsed = Date.now() - startedAt;
       window.setTimeout(() => setSpinning(false), Math.max(0, 720 - elapsed));
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => {
     setApiKey(new URLSearchParams(window.location.search).get("key") ?? "");
