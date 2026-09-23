@@ -23,7 +23,14 @@ export type FeedItem = {
   ts: number;              // epoch ms
 };
 
-export type Profile = { id: string; displayName: string; tz: string; joinedAt: number };
+export type Profile = {
+  id: string;
+  displayName: string;
+  tz: string;
+  joinedAt: number;
+  /** A small square data URL, set from the browser. Optional — initials stand in. */
+  avatar?: string;
+};
 
 export type Meta = {
   lastPublishAt: number;
@@ -45,5 +52,21 @@ export type IngestBody = {
   recentCards: FeedItem[];
 };
 
+export type Comment = { user: string; text: string; at: number };
+
+/** Banter attached to one card. Absent entirely for cards nobody has touched. */
+export type Engagement = {
+  /** user id -> emoji. One reaction each, so a second tap replaces the first. */
+  reactions: Record<string, string>;
+  comments: Comment[];
+};
+
 export type PersonView = { profile: Profile; meta: Meta; days: DayRow[] };
-export type CrewResponse = { viewer: string | null; people: PersonView[]; feed: FeedItem[] };
+
+export type CrewResponse = {
+  viewer: string | null;
+  people: PersonView[];
+  feed: FeedItem[];
+  /** Keyed by feed item id, and only for items that have any. */
+  engagement: Record<string, Engagement>;
+};

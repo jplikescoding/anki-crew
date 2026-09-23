@@ -11,6 +11,7 @@ vi.mock("@/lib/store", () => ({
   listUsers: async () => ["jp"],
   getPerson: async (id: string) => (id === "jp" ? person : null),
   getFeed: async () => [],
+  getEngagement: async () => ({}),
 }));
 
 import { GET } from "@/app/api/crew/route";

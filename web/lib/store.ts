@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import type { DayRow, FeedItem, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
+import type { Comment, DayRow, Engagement, FeedItem, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL!,
@@ -11,7 +11,12 @@ export const FEED_CAP = 500;
 const USERS = "crew:users";
 const FEED = "feed";
 const ENGAGED = "feed:engaged";
+export const COMMENT_CAP = 50;
+export const MAX_COMMENT_CHARS = 280;
+
 const profileKey = (id: string) => `user:${id}:profile`;
+const reactionsKey = (itemId: string) => `reactions:${itemId}`;
+const commentsKey = (itemId: string) => `comments:${itemId}`;
 const daysKey = (id: string) => `user:${id}:days`;
 const metaKey = (id: string) => `user:${id}:meta`;
 
@@ -24,8 +29,13 @@ export async function saveSnapshot(body: IngestBody): Promise<void> {
   await redis.sadd(USERS, id);
 
   const existing = await redis.get(profileKey(id));
-  const joinedAt = existing ? parse<Profile>(existing).joinedAt : Date.now();
-  const profile: Profile = { id, displayName: body.displayName, tz: body.tz, joinedAt };
+  const prior = existing ? parse<Profile>(existing) : null;
+  const joinedAt = prior ? prior.joinedAt : Date.now();
+  // The publisher knows nothing about avatars, so a publish must not wipe one.
+  const profile: Profile = {
+    id, displayName: body.displayName, tz: body.tz, joinedAt,
+    ...(prior?.avatar ? { avatar: prior.avatar } : {}),
+  };
   await redis.set(profileKey(id), JSON.stringify(profile));
 
   const meta: Meta = {
@@ -104,4 +114,58 @@ export async function getFeed(limit = FEED_CAP): Promise<FeedItem[]> {
     if (!byId.has(item.id)) byId.set(item.id, item);
   }
   return [...byId.values()];
+}
+
+/* ------------------------------------------------------------- engagement */
+
+/**
+ * One reaction per person per card. Tapping the same emoji again clears it,
+ * which is why this is a field-per-user hash rather than a list per emoji:
+ * setting and clearing are both a single command with nothing to reconcile.
+ */
+export async function setReaction(itemId: string, userId: string, emoji: string | null): Promise<void> {
+  if (emoji === null) {
+    await redis.hdel(reactionsKey(itemId), userId);
+    return;
+  }
+  await redis.hset(reactionsKey(itemId), { [userId]: emoji });
+  await markEngaged(itemId);
+}
+
+export async function addComment(itemId: string, comment: Comment): Promise<void> {
+  await redis.lpush(commentsKey(itemId), JSON.stringify(comment));
+  await redis.ltrim(commentsKey(itemId), 0, COMMENT_CAP - 1);
+  await markEngaged(itemId);
+}
+
+/**
+ * Banter for the cards that have any. Quiet cards cost nothing: the engaged set
+ * is one read, and only ids in it are looked up.
+ */
+export async function getEngagement(itemIds: string[]): Promise<Record<string, Engagement>> {
+  const engaged = new Set((await redis.smembers(ENGAGED)) ?? []);
+  const wanted = itemIds.filter((id) => engaged.has(id));
+  const out: Record<string, Engagement> = {};
+  for (const id of wanted) {
+    const reactions = (await redis.hgetall<Record<string, string>>(reactionsKey(id))) ?? {};
+    const rawComments = await redis.lrange<string[]>(commentsKey(id), 0, COMMENT_CAP - 1);
+    const comments = (rawComments ?? [])
+      .map((c) => parse<Comment>(c))
+      .filter((c) => c && typeof c.text === "string")
+      .sort((a, b) => a.at - b.at);
+    if (Object.keys(reactions).length > 0 || comments.length > 0) {
+      out[id] = { reactions, comments };
+    }
+  }
+  return out;
+}
+
+/* ----------------------------------------------------------------- avatar */
+
+export async function setAvatar(userId: string, avatar: string): Promise<boolean> {
+  const raw = await redis.get(profileKey(userId));
+  if (!raw) return false;
+  const profile = parse<Profile>(raw);
+  await redis.set(profileKey(userId), JSON.stringify({ ...profile, avatar }));
+  return true;
 }

@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const state = { hashes: new Map<string, Map<string, string>>(),
                 strings: new Map<string, unknown>(),
                 sets: new Map<string, Set<string>>(),
+                lists: new Map<string, string[]>(),
                 zsets: new Map<string, Map<string, number>>() };
 
 vi.mock("@upstash/redis", () => ({
@@ -37,10 +38,25 @@ vi.mock("@upstash/redis", () => ({
     async zrem(key: string, ...members: string[]) {
       const z = state.zsets.get(key); members.forEach((m) => z?.delete(m));
     }
+    async hdel(key: string, field: string) { state.hashes.get(key)?.delete(field); }
+    async lpush(key: string, value: string) {
+      const l = state.lists.get(key) ?? []; l.unshift(value); state.lists.set(key, l);
+    }
+    async ltrim(key: string, start: number, stop: number) {
+      const l = state.lists.get(key) ?? [];
+      state.lists.set(key, l.slice(start, stop === -1 ? undefined : stop + 1));
+    }
+    async lrange(key: string, start: number, stop: number) {
+      const l = state.lists.get(key) ?? [];
+      return l.slice(start, stop === -1 ? undefined : stop + 1);
+    }
   },
 }));
 
-import { saveSnapshot, listUsers, getPerson, getFeed, markEngaged, FEED_CAP } from "@/lib/store";
+import {
+  saveSnapshot, listUsers, getPerson, getFeed, markEngaged, setReaction, addComment,
+  getEngagement, setAvatar, FEED_CAP, COMMENT_CAP,
+} from "@/lib/store";
 import type { IngestBody, FeedItem } from "@/lib/types";
 
 function body(over: Partial<IngestBody> = {}): IngestBody {
@@ -61,7 +77,8 @@ function card(id: string, ts: number): FeedItem {
 
 describe("store", () => {
   beforeEach(() => {
-    state.hashes.clear(); state.strings.clear(); state.sets.clear(); state.zsets.clear();
+    state.hashes.clear(); state.strings.clear(); state.sets.clear();
+    state.zsets.clear(); state.lists.clear();
   });
 
   it("registers the user and round-trips a snapshot", async () => {
@@ -148,5 +165,93 @@ describe("store", () => {
     await saveSnapshot(body({ recentCards: many }));
     const ids = (await getFeed(FEED_CAP + 50)).map((f) => f.id);
     expect(ids).toContain("jp:0");
+  });
+});
+
+describe("engagement", () => {
+  beforeEach(() => {
+    state.hashes.clear(); state.strings.clear(); state.sets.clear();
+    state.zsets.clear(); state.lists.clear();
+  });
+
+  const comment = (text: string, at: number, user = "peter") => ({ user, text, at });
+
+  it("records a reaction and returns it", async () => {
+    await setReaction("jp:1", "peter", "🔥");
+    const e = await getEngagement(["jp:1"]);
+    expect(e["jp:1"].reactions).toEqual({ peter: "🔥" });
+  });
+
+  it("replaces a person's reaction rather than adding a second", async () => {
+    await setReaction("jp:1", "peter", "🔥");
+    await setReaction("jp:1", "peter", "💀");
+    expect((await getEngagement(["jp:1"]))["jp:1"].reactions).toEqual({ peter: "💀" });
+  });
+
+  it("clears a reaction when the emoji is null", async () => {
+    await setReaction("jp:1", "peter", "🔥");
+    await setReaction("jp:1", "peter", null);
+    expect(await getEngagement(["jp:1"])).toEqual({});
+  });
+
+  it("keeps different people's reactions side by side", async () => {
+    await setReaction("jp:1", "peter", "🔥");
+    await setReaction("jp:1", "adam", "😂");
+    expect((await getEngagement(["jp:1"]))["jp:1"].reactions)
+      .toEqual({ peter: "🔥", adam: "😂" });
+  });
+
+  it("returns comments oldest first, the way a conversation reads", async () => {
+    await addComment("jp:1", comment("second", 200));
+    await addComment("jp:1", comment("first", 100));
+    expect((await getEngagement(["jp:1"]))["jp:1"].comments.map((c) => c.text))
+      .toEqual(["first", "second"]);
+  });
+
+  it("caps the number of comments kept on one card", async () => {
+    for (let i = 0; i < COMMENT_CAP + 10; i++) await addComment("jp:1", comment(`c${i}`, i));
+    expect((await getEngagement(["jp:1"]))["jp:1"].comments).toHaveLength(COMMENT_CAP);
+  });
+
+  it("marks a card engaged so the feed cap cannot evict the conversation", async () => {
+    await addComment("jp:1", comment("hi", 1));
+    expect([...state.sets.get("feed:engaged")!]).toContain("jp:1");
+  });
+
+  it("says nothing about cards nobody has touched", async () => {
+    await setReaction("jp:1", "peter", "🔥");
+    expect(await getEngagement(["jp:2", "jp:3"])).toEqual({});
+  });
+
+  it("only looks up ids that are actually in the feed it was asked about", async () => {
+    await setReaction("jp:1", "peter", "🔥");
+    await setReaction("jp:99", "peter", "😂");
+    expect(Object.keys(await getEngagement(["jp:1"]))).toEqual(["jp:1"]);
+  });
+});
+
+describe("setAvatar", () => {
+  beforeEach(() => {
+    state.hashes.clear(); state.strings.clear(); state.sets.clear();
+    state.zsets.clear(); state.lists.clear();
+  });
+
+  it("attaches an image to an existing profile", async () => {
+    await saveSnapshot(body());
+    expect(await setAvatar("jp", "data:image/webp;base64,AAA")).toBe(true);
+    expect((await getPerson("jp"))?.profile.avatar).toBe("data:image/webp;base64,AAA");
+  });
+
+  it("refuses a person who has never published", async () => {
+    expect(await setAvatar("ghost", "data:image/webp;base64,AAA")).toBe(false);
+  });
+
+  it("survives a later publish, which knows nothing about avatars", async () => {
+    await saveSnapshot(body());
+    await setAvatar("jp", "data:image/webp;base64,AAA");
+    await saveSnapshot(body({ displayName: "JP again" }));
+    const p = await getPerson("jp");
+    expect(p?.profile.avatar).toBe("data:image/webp;base64,AAA");
+    expect(p?.profile.displayName).toBe("JP again");
   });
 });

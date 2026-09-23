@@ -23,3 +23,18 @@ export function userForIngestToken(token: string): string | null {
 export function userForReadKey(key: string): string | null {
   return lookup(process.env.READ_KEYS, key);
 }
+
+/**
+ * The person behind a request, from the `key` in the query string.
+ *
+ * The read key doubles as a write credential. Anyone holding a link can already
+ * see everything on it, so the key is the identity; a second secret per person
+ * would add distribution work and protect nothing.
+ */
+export function userForRequest(req: Request): string | null {
+  try {
+    return userForReadKey(new URL(req.url).searchParams.get("key") ?? "");
+  } catch {
+    return null;
+  }
+}

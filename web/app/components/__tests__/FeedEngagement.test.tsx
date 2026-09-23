@@ -1,0 +1,127 @@
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
+import Feed from "@/app/components/Feed";
+import type { Engagement, FeedItem, PersonView } from "@/lib/types";
+
+function person(id: string, name: string): PersonView {
+  return {
+    profile: { id, displayName: name, tz: "America/New_York", joinedAt: 0 },
+    meta: { lastPublishAt: 0, streak: 0, todayKey: "2026-09-21", allTimeReviews: 0, firstReviewAt: 0 },
+    days: [],
+  };
+}
+
+const people = [person("jp", "JP"), person("peter", "Peter")];
+
+const card: FeedItem = {
+  id: "peter:1", user: "peter", front: "話しかける", back: "to speak to",
+  deck: "Core", ease: 3, ivl: 21, ts: Date.now() - 60_000,
+};
+
+function view(engagement: Record<string, Engagement> = {}, extra = {}) {
+  const onReact = vi.fn();
+  const onComment = vi.fn();
+  render(
+    <Feed
+      items={[card]}
+      people={people}
+      engagement={engagement}
+      viewer="jp"
+      apiKey="key_jp"
+      onReact={onReact}
+      onComment={onComment}
+      {...extra}
+    />,
+  );
+  return { onReact, onComment };
+}
+
+describe("reactions", () => {
+  it("sends the emoji you tapped", () => {
+    const { onReact } = view();
+    fireEvent.click(screen.getByTestId("react-peter:1-🔥"));
+    expect(onReact).toHaveBeenCalledWith("peter:1", "🔥");
+  });
+
+  it("clears your reaction when you tap the one you already chose", () => {
+    const { onReact } = view({ "peter:1": { reactions: { jp: "🔥" }, comments: [] } });
+    fireEvent.click(screen.getByTestId("react-peter:1-🔥"));
+    expect(onReact).toHaveBeenCalledWith("peter:1", null);
+  });
+
+  it("marks your own reaction as pressed and leaves the others alone", () => {
+    view({ "peter:1": { reactions: { jp: "🔥" }, comments: [] } });
+    expect(screen.getByTestId("react-peter:1-🔥")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("react-peter:1-💀")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("counts several people on the same emoji as one tally", () => {
+    view({ "peter:1": { reactions: { jp: "🔥", peter: "🔥" }, comments: [] } });
+    expect(screen.getByTestId("react-peter:1-🔥").textContent).toContain("2");
+  });
+});
+
+describe("comments", () => {
+  const withComment = {
+    "peter:1": {
+      reactions: {},
+      comments: [{ user: "peter", text: "this one keeps getting me", at: 1000 }],
+    },
+  };
+
+  it("shows how many there are without opening the thread", () => {
+    view(withComment);
+    expect(screen.getByTestId("thread-peter:1").textContent).toContain("1 comment");
+  });
+
+  it("opens the thread and shows the author", () => {
+    view(withComment);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    expect(screen.getByText("this one keeps getting me")).toBeTruthy();
+    expect(within(screen.getByTestId("item-peter:1")).getAllByText("Peter").length).toBeGreaterThan(0);
+  });
+
+  it("submits a comment and clears the box", () => {
+    const { onComment } = view(withComment);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    const input = screen.getByTestId("comment-input-peter:1") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "  brutal  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onComment).toHaveBeenCalledWith("peter:1", "brutal");
+    expect(input.value).toBe("");
+  });
+
+  it("refuses to submit an empty comment", () => {
+    const { onComment } = view(withComment);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    const input = screen.getByTestId("comment-input-peter:1");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onComment).not.toHaveBeenCalled();
+  });
+
+  it("flags comments written since you last looked, but not your own", () => {
+    view({
+      "peter:1": {
+        reactions: {},
+        comments: [
+          { user: "peter", text: "theirs", at: 5000 },
+          { user: "jp", text: "mine", at: 6000 },
+        ],
+      },
+    }, { unreadSince: 4000 });
+    expect(screen.getByTestId("thread-peter:1").textContent).toContain("1 new");
+  });
+
+  it("says nothing is new when everything predates your last visit", () => {
+    view(withComment, { unreadSince: 9999 });
+    expect(screen.getByTestId("thread-peter:1").textContent).not.toContain("new");
+  });
+});
+
+describe("read-only viewing", () => {
+  it("hides the reaction buttons nobody has used when you cannot write", () => {
+    render(<Feed items={[card]} people={people} engagement={{}} />);
+    expect(screen.queryByTestId("react-peter:1-🔥")).toBeNull();
+  });
+});

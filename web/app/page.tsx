@@ -5,10 +5,11 @@ import CrewChart from "@/app/components/CrewChart";
 import Feed from "@/app/components/Feed";
 import PersonPanel from "@/app/components/PersonPanel";
 import StatTiles from "@/app/components/StatTiles";
+import { Avatar, AvatarUploader } from "@/app/components/Avatar";
 import { rankBy } from "@/lib/metrics";
 import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration, setSoundEnabled, soundEnabled } from "@/lib/sound";
-import type { CrewResponse, PersonView } from "@/lib/types";
+import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "you";
 const TABS: Tab[] = ["board", "feed", "you"];
@@ -32,6 +33,11 @@ export default function Page() {
   const [sound, setSound] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [hint, setHint] = useState(false);
+  const [engagement, setEngagement] = useState<Record<string, Engagement>>({});
+  const [jumpSignal, setJumpSignal] = useState(0);
+  const [apiKey, setApiKey] = useState("");
+  // Frozen for the session so highlights do not vanish while you are reading.
+  const unreadSince = useRef(0);
 
   // What the previous visit showed, captured once so the roll-up has a floor.
   const before = useRef<Seen | null>(null);
@@ -56,7 +62,12 @@ export default function Page() {
       if (scalpName) playCelebration();
 
       setData(next);
+      setEngagement(next.engagement ?? {});
+      if (unreadSince.current === 0) {
+        unreadSince.current = before.current?.commentsSeenAt ?? Date.now();
+      }
       writeSeen({
+        commentsSeenAt: before.current?.commentsSeenAt,
         totals: Object.fromEntries(next.people.map((p) => [p.profile.id, todayReviews(p)])),
         order,
         at: Date.now(),
@@ -71,7 +82,10 @@ export default function Page() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    setApiKey(new URLSearchParams(window.location.search).get("key") ?? "");
+    void load();
+  }, [load]);
 
   // The only refresh trigger that earns its cost: you came back to look.
   useEffect(() => {
@@ -84,6 +98,37 @@ export default function Page() {
     try { if (!localStorage.getItem(HINT_KEY)) setHint(true); } catch { /* storage blocked */ }
     setSound(soundEnabled());
   }, []);
+
+  /** Applied locally first: a reaction that waits on a round trip feels broken. */
+  const react = useCallback((itemId: string, emoji: string | null) => {
+    if (!data?.viewer) return;
+    const me = data.viewer;
+    setEngagement((prev) => {
+      const cur = prev[itemId] ?? { reactions: {}, comments: [] };
+      const reactions = { ...cur.reactions };
+      if (emoji === null) delete reactions[me]; else reactions[me] = emoji;
+      return { ...prev, [itemId]: { ...cur, reactions } };
+    });
+    void fetch("/api/react?key=" + encodeURIComponent(apiKey), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId, emoji }),
+    });
+  }, [data?.viewer, apiKey]);
+
+  const comment = useCallback((itemId: string, text: string) => {
+    if (!data?.viewer) return;
+    const mine = { user: data.viewer, text, at: Date.now() };
+    setEngagement((prev) => {
+      const cur = prev[itemId] ?? { reactions: {}, comments: [] };
+      return { ...prev, [itemId]: { ...cur, comments: [...cur.comments, mine] } };
+    });
+    void fetch("/api/comment?key=" + encodeURIComponent(apiKey), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemId, text }),
+    });
+  }, [data?.viewer, apiKey]);
 
   const dismissHint = () => {
     setHint(false);
@@ -108,6 +153,14 @@ export default function Page() {
     return () => window.removeEventListener("keydown", onKey);
   }, [load]);
 
+  // Opening the feed is what clears the badge; the highlights stay put so you
+  // can still see which ones were new.
+  useEffect(() => {
+    if (tab !== "feed") return;
+    const prev = readSeen();
+    if (prev) writeSeen({ ...prev, commentsSeenAt: Date.now() });
+  }, [tab]);
+
   if (error) {
     return (
       <main className="mx-auto max-w-md px-6 py-24 text-center">
@@ -124,6 +177,9 @@ export default function Page() {
   }
 
   const selected = data.people.find((p) => p.profile.id === (who ?? data.viewer)) ?? data.people[0];
+  const unreadComments = Object.values(engagement).reduce(
+    (n, e) => n + e.comments.filter((c) => c.at > unreadSince.current && c.user !== data.viewer).length,
+    0);
   const me = data.people.find((p) => p.profile.id === data.viewer);
   const gained = me ? todayReviews(me) - (before.current?.totals[me.profile.id] ?? todayReviews(me)) : 0;
   const seenTotals = before.current?.totals;
@@ -144,15 +200,28 @@ export default function Page() {
             {TABS.map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => {
+                  setTab(t);
+                  if (t === "feed" && unreadComments > 0) setJumpSignal((n) => n + 1);
+                }}
                 aria-pressed={tab === t}
-                className="rounded-full px-3 py-1.5 capitalize transition-colors"
+                className="relative rounded-full px-3 py-1.5 capitalize transition-colors"
                 style={{
                   background: tab === t ? "var(--pane-lift)" : "transparent",
                   color: tab === t ? "var(--ink)" : "var(--ink-faint)",
                 }}
               >
                 {t}
+                {t === "feed" && unreadComments > 0 && (
+                  <span
+                    data-testid="unread-badge"
+                    title={unreadComments + " new — opens at the first one"}
+                    className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                    style={{ background: "var(--cyan)", color: "#04121A" }}
+                  >
+                    {unreadComments}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -221,7 +290,19 @@ export default function Page() {
         </>
       )}
 
-      {tab === "feed" && <Feed items={data.feed} people={data.people} />}
+      {tab === "feed" && (
+        <Feed
+          items={data.feed}
+          people={data.people}
+          engagement={engagement}
+          viewer={data.viewer}
+          apiKey={apiKey}
+          onReact={react}
+          onComment={comment}
+          unreadSince={unreadSince.current}
+          jumpSignal={jumpSignal}
+        />
+      )}
 
       {tab === "you" && !selected && (
         <div className="px-6 py-16 text-center">
@@ -249,6 +330,29 @@ export default function Page() {
                 {p.profile.displayName}
               </button>
             ))}
+          </div>
+          <div className="px-5 pt-4">
+            {selected.profile.id === data.viewer ? (
+              <AvatarUploader
+                profile={selected.profile}
+                index={data.people.findIndex((p) => p.profile.id === selected.profile.id)}
+                apiKey={apiKey}
+                onChange={(image) =>
+                  setData((d) => d && ({
+                    ...d,
+                    people: d.people.map((p) =>
+                      p.profile.id === selected.profile.id
+                        ? { ...p, profile: { ...p.profile, avatar: image } }
+                        : p),
+                  }))}
+              />
+            ) : (
+              <Avatar
+                profile={selected.profile}
+                size={40}
+                index={data.people.findIndex((p) => p.profile.id === selected.profile.id)}
+              />
+            )}
           </div>
           <PersonPanel person={selected} items={data.feed} />
         </>
