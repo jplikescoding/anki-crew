@@ -170,3 +170,65 @@ export function Track({ days, lit }: { days: TrackDay[]; lit: boolean }) {
     </span>
   );
 }
+
+/* --------------------------------------------------------------- stat tile */
+
+/**
+ * A record worth chasing. Each tile sits on a ground tinted to its own meaning
+ * rather than the same grey as its neighbours -- three identical panes in a row
+ * is the card-kit look, and it reads as flat however good the numbers are.
+ */
+export function StatTile({
+  label, value, numeric, sub, more, tint, glow, help, delay = 0, children,
+}: {
+  label: string;
+  value?: string;
+  numeric?: number;
+  sub?: string;
+  more?: string;
+  tint: string;
+  glow: string;
+  help: string;
+  delay?: number;
+  children?: ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+  const [sweepKey, setSweepKey] = useState(0);
+  const [live, setLive] = useState(delay === 0);
+
+  useEffect(() => {
+    if (delay === 0) return;
+    const t = window.setTimeout(() => setLive(true), delay);
+    return () => window.clearTimeout(t);
+  }, [delay]);
+
+  return (
+    <div
+      onMouseEnter={() => { setOver(true); setSweepKey((k) => k + 1); }}
+      onMouseLeave={() => setOver(false)}
+      className="relative overflow-hidden rounded-[14px] border px-4 py-3.5 transition-[border-color,box-shadow,transform] duration-300"
+      style={{
+        borderColor: over ? tint : "var(--edge)",
+        background: `linear-gradient(158deg, ${glow}, rgba(255,255,255,.04) 62%)`,
+        boxShadow: over ? `0 0 26px -12px ${tint}` : "none",
+        transform: over ? "translateY(-2px)" : "none",
+      }}
+    >
+      {over && <span key={sweepKey} className="sweep absolute inset-0" />}
+      <div className="relative text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
+        <Tooltip label={help}><span>{label}</span></Tooltip>
+      </div>
+      <div className="relative mt-1.5 text-[26px] font-extrabold tabular-nums tracking-[-.035em]"
+           style={{ color: tint }}>
+        {children ?? (numeric !== undefined && live
+          ? <CountUp to={numeric} from={0} duration={900} />
+          : numeric !== undefined ? numeric.toLocaleString() : value)}
+      </div>
+      {(sub || more) && (
+        <div className="relative mt-0.5 text-[11px]" style={{ color: "var(--ink-faint)" }}>
+          {over && more ? more : sub}
+        </div>
+      )}
+    </div>
+  );
+}

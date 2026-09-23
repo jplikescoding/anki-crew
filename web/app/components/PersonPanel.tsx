@@ -1,7 +1,7 @@
 "use client";
 import { deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
 import type { FeedItem, PersonView } from "@/lib/types";
-import { StreakStar, Tooltip } from "@/app/components/primitives";
+import { StatTile, StreakStar } from "@/app/components/primitives";
 
 function prettyDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -29,30 +29,42 @@ export default function PersonPanel({ person, items }: { person: PersonView; ite
         <span className="text-[10.5px]" style={{ color: "var(--ink-faint)" }}>{person.profile.tz}</span>
       </header>
 
-      <div className="grid grid-cols-4 gap-2.5">
-        {[
-          { k: "All time", v: person.meta.allTimeReviews.toLocaleString(), tint: "var(--violet-soft)", id: "all-time",
-            help: "Every review ever recorded in this collection, cram sessions excluded." },
-          { k: "New cards", v: sums.newCards.toLocaleString(), tint: "var(--cyan-soft)", id: "new-cards",
-            help: "Cards seen for the very first time — the ones that grow the deck rather than maintain it." },
-          { k: "Recall", v: ret === null ? "—" : `${ret}%`, tint: "var(--jade)", id: "recall",
-            help: "Of the cards Anki showed, the share recalled. Again is a miss; Hard, Good and Easy are hits." },
-        ].map((t) => (
-          <div key={t.k} className="pane px-3 py-3 text-center">
-            <div className="text-[9.5px]" style={{ color: "var(--ink-faint)" }}>
-              <Tooltip label={t.help}><span>{t.k}</span></Tooltip>
-            </div>
-            <div data-testid={t.id} className="mt-1.5 text-[19px] font-extrabold tabular-nums tracking-[-.03em]" style={{ color: t.tint }}>
-              {t.v}
-            </div>
-          </div>
-        ))}
-        <div className="pane px-3 py-3 text-center">
-          <div className="text-[9.5px]" style={{ color: "var(--ink-faint)" }}>Streak</div>
-          <div className="mt-1.5 text-[19px] font-extrabold" style={{ color: "var(--gold)" }}>
-            <StreakStar streak={person.meta.streak} />
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <StatTile
+          label="All time"
+          numeric={person.meta.allTimeReviews}
+          tint="var(--violet-soft)"
+          glow="rgba(124,58,237,.20)"
+          delay={60}
+          help="Every review ever recorded in this collection. Cram sessions and manual reschedules are excluded."
+        >
+          <span data-testid="all-time">{person.meta.allTimeReviews.toLocaleString()}</span>
+        </StatTile>
+        <StatTile
+          label="New cards"
+          numeric={sums.newCards}
+          tint="var(--cyan-soft)"
+          glow="rgba(6,182,212,.16)"
+          delay={180}
+          help="Cards seen for the very first time — the ones that grow the deck rather than maintain it."
+        />
+        <StatTile
+          label="Recall"
+          value={ret === null ? "—" : `${ret}%`}
+          tint="var(--jade)"
+          glow="rgba(52,211,153,.14)"
+          delay={300}
+          help="Of the cards Anki showed, the share recalled. Again is a miss; Hard, Good and Easy are hits."
+        />
+        <StatTile
+          label="Streak"
+          tint="var(--gold)"
+          glow="rgba(251,191,36,.15)"
+          delay={420}
+          help="Consecutive days with at least one review. The star changes at 3, 7, 14, 30 and 100 days."
+        >
+          <StreakStar streak={person.meta.streak} />
+        </StatTile>
       </div>
 
       <div className="pane mt-2.5 px-4 pb-3 pt-3">

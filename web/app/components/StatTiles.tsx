@@ -1,8 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
 import { personalBest, shiftDays, totals, weekStart, windowFrom } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
-import { CountUp, Tooltip } from "@/app/components/primitives";
+import { StatTile } from "@/app/components/primitives";
 
 function prettyDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -15,50 +14,6 @@ function prettyDate(iso: string) {
  * tells you something beats motion that only moves -- and a hover-bounce on
  * every card is the commonest tell of a templated design.
  */
-function Tile({ label, value, numeric, sub, more, tint, glow, help, delay }: {
-  label: string; value: string; numeric?: number; sub: string; more?: string;
-  tint: string; glow: string; help: string; delay: number;
-}) {
-  const [over, setOver] = useState(false);
-  const [sweepKey, setSweepKey] = useState(0);
-  const [live, setLive] = useState(false);
-
-  // Values arrive one after another rather than all at once, so the row reads
-  // as three separate facts instead of one block appearing.
-  useEffect(() => {
-    const t = window.setTimeout(() => setLive(true), delay);
-    return () => window.clearTimeout(t);
-  }, [delay]);
-
-  return (
-    <div
-      onMouseEnter={() => { setOver(true); setSweepKey((k) => k + 1); }}
-      onMouseLeave={() => setOver(false)}
-      className="relative overflow-hidden rounded-[14px] border px-4 py-3.5 transition-[border-color,box-shadow,transform] duration-300"
-      style={{
-        borderColor: over ? tint : "var(--edge)",
-        background: `linear-gradient(158deg, ${glow}, rgba(255,255,255,.04) 62%)`,
-        boxShadow: over ? `0 0 26px -12px ${tint}` : "none",
-        transform: over ? "translateY(-2px)" : "none",
-      }}
-    >
-      {over && <span key={sweepKey} className="sweep absolute inset-0" />}
-      <div className="relative text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
-        <Tooltip label={help}><span>{label}</span></Tooltip>
-      </div>
-      <div className="relative mt-1.5 text-[26px] font-extrabold tabular-nums tracking-[-.035em]"
-           style={{ color: tint }}>
-        {numeric !== undefined && live
-          ? <CountUp to={numeric} from={0} duration={1100} />
-          : numeric !== undefined ? "0" : value}
-      </div>
-      <div className="relative mt-0.5 text-[11px]" style={{ color: "var(--ink-faint)" }}>
-        {over && more ? more : sub}
-      </div>
-    </div>
-  );
-}
-
 /**
  * Records, not today's numbers. The board already answers "who is winning" —
  * these answer "what is worth chasing", which is what keeps someone going on a
@@ -90,7 +45,7 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
 
   return (
     <div className="grid grid-cols-3 gap-2.5 px-3 pt-3">
-      <Tile
+      <StatTile
         label="Your best day"
         value="—"
         numeric={best ? best.reviews : undefined}
@@ -101,7 +56,7 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
         delay={60}
         help="The most cards you have ever reviewed in a single day. Beat it and this tile updates."
       />
-      <Tile
+      <StatTile
         label="Crew this week"
         value="—"
         numeric={thisWeek}
@@ -112,7 +67,7 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
         delay={200}
         help="Everyone's reviews over the last seven days, added together, against the seven days before that."
       />
-      <Tile
+      <StatTile
         label="Longest streak"
         value="—"
         numeric={longest.streak > 0 ? longest.streak : undefined}
