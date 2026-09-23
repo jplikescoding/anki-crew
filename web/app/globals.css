@@ -120,3 +120,19 @@ body {
 
 /* Used by the refresh control, which always completes whole rotations. */
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* A light passes over a tile when you point at it. User-triggered, ~700ms,
+   gone before it can become wallpaper. */
+@keyframes tile-sweep {
+  from { transform: translateX(-130%) skewX(-18deg); }
+  to   { transform: translateX(240%) skewX(-18deg); }
+}
+.sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.13), transparent);
+  width: 42%;
+  animation: tile-sweep 700ms cubic-bezier(.3,.7,.4,1) 1;
+}

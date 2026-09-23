@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { personalBest, shiftDays, totals, weekStart, windowFrom } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
-import { Tooltip } from "@/app/components/primitives";
+import { CountUp, Tooltip } from "@/app/components/primitives";
 
 function prettyDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -15,27 +15,44 @@ function prettyDate(iso: string) {
  * tells you something beats motion that only moves -- and a hover-bounce on
  * every card is the commonest tell of a templated design.
  */
-function Tile({ label, value, sub, more, tint, help }: {
-  label: string; value: string; sub: string; more?: string; tint: string; help: string;
+function Tile({ label, value, numeric, sub, more, tint, glow, help, delay }: {
+  label: string; value: string; numeric?: number; sub: string; more?: string;
+  tint: string; glow: string; help: string; delay: number;
 }) {
   const [over, setOver] = useState(false);
+  const [sweepKey, setSweepKey] = useState(0);
+  const [live, setLive] = useState(false);
+
+  // Values arrive one after another rather than all at once, so the row reads
+  // as three separate facts instead of one block appearing.
+  useEffect(() => {
+    const t = window.setTimeout(() => setLive(true), delay);
+    return () => window.clearTimeout(t);
+  }, [delay]);
+
   return (
     <div
-      className="pane px-4 py-3.5 transition-colors duration-200"
-      onMouseEnter={() => setOver(true)}
+      onMouseEnter={() => { setOver(true); setSweepKey((k) => k + 1); }}
       onMouseLeave={() => setOver(false)}
-      style={{ borderColor: over ? tint : "var(--edge)" }}
+      className="relative overflow-hidden rounded-[14px] border px-4 py-3.5 transition-[border-color,box-shadow,transform] duration-300"
+      style={{
+        borderColor: over ? tint : "var(--edge)",
+        background: `linear-gradient(158deg, ${glow}, rgba(255,255,255,.04) 62%)`,
+        boxShadow: over ? `0 0 26px -12px ${tint}` : "none",
+        transform: over ? "translateY(-2px)" : "none",
+      }}
     >
-      <div className="text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
+      {over && <span key={sweepKey} className="sweep absolute inset-0" />}
+      <div className="relative text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
         <Tooltip label={help}><span>{label}</span></Tooltip>
       </div>
-      <div
-        className="mt-1.5 text-[24px] font-extrabold tabular-nums tracking-[-.03em] transition-transform duration-200"
-        style={{ color: tint, transform: over ? "translateY(-1px)" : "none" }}
-      >
-        {value}
+      <div className="relative mt-1.5 text-[26px] font-extrabold tabular-nums tracking-[-.035em]"
+           style={{ color: tint }}>
+        {numeric !== undefined && live
+          ? <CountUp to={numeric} from={0} duration={1100} />
+          : numeric !== undefined ? "0" : value}
       </div>
-      <div className="mt-0.5 text-[11px] transition-colors duration-200" style={{ color: "var(--ink-faint)" }}>
+      <div className="relative mt-0.5 text-[11px]" style={{ color: "var(--ink-faint)" }}>
         {over && more ? more : sub}
       </div>
     </div>
@@ -75,26 +92,35 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
     <div className="grid grid-cols-3 gap-2.5 px-3 pt-3">
       <Tile
         label="Your best day"
-        value={best ? best.reviews.toLocaleString() : "—"}
+        value="—"
+        numeric={best ? best.reviews : undefined}
         sub={best ? prettyDate(best.date) : "no sessions yet"}
         more={bestDetail}
         tint="var(--violet-soft)"
+        glow="rgba(124,58,237,.20)"
+        delay={60}
         help="The most cards you have ever reviewed in a single day. Beat it and this tile updates."
       />
       <Tile
         label="Crew this week"
-        value={thisWeek.toLocaleString()}
+        value="—"
+        numeric={thisWeek}
         sub={trend === null ? "first week on record" : `${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)}% on last week`}
         more={lastWeek > 0 ? `${lastWeek.toLocaleString()} the week before` : undefined}
         tint="var(--cyan-soft)"
+        glow="rgba(6,182,212,.16)"
+        delay={200}
         help="Everyone's reviews over the last seven days, added together, against the seven days before that."
       />
       <Tile
         label="Longest streak"
-        value={longest.streak > 0 ? `${longest.streak}` : "—"}
+        value="—"
+        numeric={longest.streak > 0 ? longest.streak : undefined}
         sub={longest.streak > 0 ? longest.who : "nobody has one yet"}
         more={longest.streak > 0 ? `${longest.who} — ${longest.streak} days unbroken` : undefined}
         tint="var(--gold)"
+        glow="rgba(251,191,36,.15)"
+        delay={340}
         help="The longest run of consecutive study days anyone in the crew is currently holding."
       />
     </div>
