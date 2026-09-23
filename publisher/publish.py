@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import shutil
+import ssl
 import sys
 import time
 import urllib.error
@@ -28,6 +29,12 @@ QUIET_SECONDS = 45
 # ...except during a long session, where the dashboard should climb as you go
 # rather than jumping when you finally quit.
 SESSION_UPDATE_SECONDS = 300
+# After a failed send, how long before the scheduled task tries again. Without
+# a pause an offline laptop would copy the whole collection every minute.
+RETRY_SECONDS = 300
+CERT_HINT = ("Python can't verify the server's HTTPS certificate. On a Mac with Python "
+             "from python.org, open Applications > Python 3.x and run "
+             "'Install Certificates.command', then try again.")
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
 # Exit codes: 2 config, 3 schema, 4 network.
 EXIT_UNREADABLE_COLLECTION = 5
@@ -58,6 +65,25 @@ def should_publish(mtime, last_mtime, last_publish_at, now):
     settled = (now - mtime) >= QUIET_SECONDS
     overdue = last_publish_at is None or (now - last_publish_at) >= SESSION_UPDATE_SECONDS
     return settled or overdue
+
+
+def collection_mtime(src):
+    """
+    When the collection last changed. Anki writes reviews to the -wal file and
+    only folds them into the main file at a checkpoint or on close, so during a
+    session only the WAL's timestamp moves.
+    """
+    mtime = os.path.getmtime(src)
+    try:
+        return max(mtime, os.path.getmtime(str(src) + "-wal"))
+    except OSError:
+        return mtime
+
+
+def backing_off(state, now):
+    """Did a send fail recently enough that the scheduled task should wait?"""
+    failed_at = state.get("lastFailAt")
+    return failed_at is not None and (now - failed_at) < RETRY_SECONDS
 
 
 class ConfigError(Exception):
@@ -134,16 +160,18 @@ def main(argv=None):
         return 2
 
     mtime = None
+    state = {}
     if args.on_change:
         try:
-            mtime = os.path.getmtime(src)
+            mtime = collection_mtime(src)
         except OSError as exc:
             print("cannot read collection at %s: %s" % (src, exc), file=sys.stderr)
             return EXIT_UNREADABLE_COLLECTION
         state = read_state()
-        if not should_publish(mtime, state.get("lastMtime"),
-                              state.get("lastPublishAt"), time.time()):
-            return 0  # nothing new, or you are still studying
+        now = time.time()
+        if backing_off(state, now) or not should_publish(
+                mtime, state.get("lastMtime"), state.get("lastPublishAt"), now):
+            return 0  # nothing new, still studying, or waiting out a failure
 
     try:
         con, tmpdir = anki_reader.open_collection_copy(src)
@@ -169,11 +197,16 @@ def main(argv=None):
 
     try:
         post_payload(cfg["endpoint"], cfg["token"], payload)
-    except urllib.error.HTTPError as exc:
-        print("publish failed: HTTP %s %s" % (exc.code, exc.reason), file=sys.stderr)
-        return 4
-    except urllib.error.URLError as exc:
-        print("publish failed: %s" % exc.reason, file=sys.stderr)
+    except OSError as exc:  # URLError, HTTPError and read timeouts are all OSErrors
+        if isinstance(exc, urllib.error.HTTPError):
+            print("publish failed: HTTP %s %s" % (exc.code, exc.reason), file=sys.stderr)
+        else:
+            reason = getattr(exc, "reason", exc)
+            print("publish failed: %s" % reason, file=sys.stderr)
+            if isinstance(reason, ssl.SSLCertVerificationError):
+                print(CERT_HINT, file=sys.stderr)
+        if args.on_change:
+            write_state(STATE_FILE, dict(state, lastFailAt=time.time()))
         return 4
 
     if args.on_change and mtime is not None:

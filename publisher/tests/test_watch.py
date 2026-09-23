@@ -65,5 +65,42 @@ class TestState(unittest.TestCase):
             json.load(fh)  # must still be valid JSON
 
 
+class TestCollectionMtime(unittest.TestCase):
+    """Anki writes reviews into collection.anki2-wal while you study, and only
+    folds them into the main file at a checkpoint or on close."""
+
+    def setUp(self):
+        self.src = os.path.join(tempfile.mkdtemp(), "collection.anki2")
+        open(self.src, "w").close()
+        os.utime(self.src, (1000, 1000))
+
+    def test_uses_the_main_file_when_there_is_no_wal(self):
+        self.assertEqual(P.collection_mtime(self.src), 1000)
+
+    def test_sees_a_session_that_has_only_reached_the_wal(self):
+        open(self.src + "-wal", "w").close()
+        os.utime(self.src + "-wal", (2000, 2000))
+        self.assertEqual(P.collection_mtime(self.src), 2000)
+
+    def test_ignores_a_wal_older_than_the_main_file(self):
+        open(self.src + "-wal", "w").close()
+        os.utime(self.src + "-wal", (500, 500))
+        self.assertEqual(P.collection_mtime(self.src), 1000)
+
+
+class TestBackingOff(unittest.TestCase):
+    """A failed send leaves the collection 'changed', so without a pause every
+    minute would copy the whole thing again until the network came back."""
+
+    def test_waits_after_a_recent_failure(self):
+        self.assertTrue(P.backing_off({"lastFailAt": 1000}, now=1000 + 60))
+
+    def test_tries_again_once_the_pause_is_over(self):
+        self.assertFalse(P.backing_off({"lastFailAt": 1000}, now=1000 + P.RETRY_SECONDS))
+
+    def test_does_not_wait_when_nothing_has_failed(self):
+        self.assertFalse(P.backing_off({}, now=1000))
+
+
 if __name__ == "__main__":
     unittest.main()

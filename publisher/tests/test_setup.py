@@ -72,11 +72,13 @@ class TestScheduleCommand(unittest.TestCase):
         d = tempfile.mkdtemp()
         with mock.patch.object(S.sys, "platform", "darwin"):
             path = S.write_agent_plist(d, "/usr/bin/python3")
-        body = open(path, encoding="utf-8").read()
-        self.assertIn("com.ankicrew.publish", body)
-        self.assertIn("--on-change", body)
-        self.assertIn("<key>StartInterval</key><integer>60</integer>", body)
-        self.assertIn("RunAtLoad", body)
+        import plistlib
+        with open(path, "rb") as fh:
+            agent = plistlib.load(fh)
+        self.assertEqual(agent["Label"], "com.ankicrew.publish")
+        self.assertIn("--on-change", agent["ProgramArguments"])
+        self.assertEqual(agent["StartInterval"], 60)
+        self.assertTrue(agent["RunAtLoad"])
 
     def test_linux_prints_a_cron_line(self):
         with mock.patch.object(S.sys, "platform", "linux"):
@@ -84,6 +86,42 @@ class TestScheduleCommand(unittest.TestCase):
         self.assertTrue(cmd.startswith("* * * * *"))
         self.assertIn("--on-change", cmd)
         self.assertIn("publish.py", cmd)
+
+
+class TestMacAgent(unittest.TestCase):
+    def test_plist_is_valid_and_logs_somewhere_you_can_read(self):
+        # With no log a background failure on a Mac is invisible.
+        import plistlib
+        d = tempfile.mkdtemp()
+        with mock.patch.object(S.sys, "platform", "darwin"):
+            path = S.write_agent_plist(d, "/usr/bin/python3")
+        with open(path, "rb") as fh:
+            agent = plistlib.load(fh)
+        self.assertEqual(agent["StandardErrorPath"], os.path.join(d, "publish.log"))
+        self.assertEqual(agent["StandardOutPath"], os.path.join(d, "publish.log"))
+
+    def test_plist_survives_a_path_with_xml_characters(self):
+        import plistlib
+        d = os.path.join(tempfile.mkdtemp(), "R&D")
+        os.makedirs(d)
+        path = S.write_agent_plist(d, "/usr/bin/python3")
+        with open(path, "rb") as fh:
+            agent = plistlib.load(fh)
+        self.assertEqual(agent["ProgramArguments"][1], os.path.join(d, "publish.py"))
+
+    def test_rerunning_the_command_replaces_a_loaded_agent(self):
+        # `launchctl load` refuses an agent that is already loaded.
+        with mock.patch.object(S.sys, "platform", "darwin"):
+            cmd = S.schedule_command("/usr/bin/python3", "/Users/x/anki-crew/publisher")
+        self.assertLess(cmd.index("launchctl unload"), cmd.index("launchctl load"))
+
+    def test_spots_folders_a_background_job_cannot_read(self):
+        home = "/Users/x"
+        self.assertEqual(S.protected_folder("/Users/x/Downloads/anki-crew/publisher", home), "Downloads")
+        self.assertEqual(S.protected_folder("/Users/x/Documents/anki-crew/publisher", home), "Documents")
+        self.assertEqual(S.protected_folder("/Users/x/Desktop/anki-crew/publisher", home), "Desktop")
+        self.assertIsNone(S.protected_folder("/Users/x/anki-crew/publisher", home))
+        self.assertIsNone(S.protected_folder("/Users/x/Documentsish/publisher", home))
 
 
 class TestWriteConfig(unittest.TestCase):

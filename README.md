@@ -7,17 +7,21 @@ A shared dashboard for the three of us — who studied what, how much, and the a
 Takes about five minutes. Python 3.9 or newer, standard library only — no `pip install`, nothing else to set up.
 
 ```bash
+cd ~
 git clone <repo-url>
 cd anki-crew/publisher
 python setup.py
 python publish.py --dry-run
+python publish.py
 ```
 
-`setup.py` finds your Anki collection, asks for a display name and the ingest token we'll send you, and writes a local config file. `publish.py --dry-run` prints exactly what *would* be sent, without sending it — read it before you trust it.
+On a Mac, type `python3` wherever this says `python`, and clone into your home folder as above — **not** Desktop, Documents or Downloads. macOS won't let a background job read those, so the publisher would install fine and then silently never run. `setup.py` refuses to continue from one of them.
+
+`setup.py` finds your Anki collection, asks for a display name and the ingest token we'll send you, and writes a local config file. `publish.py --dry-run` prints exactly what *would* be sent, without sending it — read it before you trust it. Then `publish.py` sends it once for real; it should end with `published ...`.
 
 `setup.py` finishes by printing one more command that turns on automatic publishing. Run that and you're done.
 
-- **macOS** — it writes a launchd agent and prints a `cp` + `launchctl load` line. launchd rather than cron because cron doesn't run while your Mac is asleep and never catches up; launchd runs the missed check when you open the lid.
+- **macOS** — it writes a launchd agent and prints a `cp` + `launchctl load` line. launchd rather than cron because cron doesn't run while your Mac is asleep and never catches up; launchd runs the missed check when you open the lid. If your numbers never show up, `publisher/publish.log` says why.
 - **Windows** — it writes `install_task.ps1` and prints a one-line `powershell` command to run it.
 - **Linux** — it prints a crontab line.
 
@@ -70,6 +74,6 @@ All four are read at runtime, so rotating one is an env var edit plus a redeploy
 ## Tests
 
 ```bash
-cd publisher && python -m unittest discover -s tests -t .   # 93
-cd web && npm test                                          # 156
+cd publisher && python -m unittest discover -s tests -t .   # 104
+cd web && npm test                                          # 170
 ```

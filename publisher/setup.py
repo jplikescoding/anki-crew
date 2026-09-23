@@ -1,6 +1,7 @@
 """One-time setup: find the collection, write config.json, print the schedule line."""
 import json
 import os
+import plistlib
 import sys
 
 from collection_paths import find_collections
@@ -75,30 +76,37 @@ def write_agent_plist(script_dir, python_exe):
     lid that stays shut until Thursday would simply lose the week. launchd
     fires a missed StartInterval when the machine wakes.
     """
-    publish = os.path.join(script_dir, "publish.py")
     path = os.path.join(script_dir, "%s.plist" % AGENT_LABEL)
-    body = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
-        '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
-        '<plist version="1.0">\n'
-        "<dict>\n"
-        "  <key>Label</key><string>%s</string>\n"
-        "  <key>ProgramArguments</key>\n"
-        "  <array>\n"
-        "    <string>%s</string>\n"
-        "    <string>%s</string>\n"
-        "    <string>--on-change</string>\n"
-        "  </array>\n"
-        "  <!-- Every minute, but a run with nothing new costs one file stat. -->\n"
-        "  <key>StartInterval</key><integer>60</integer>\n"
-        "  <key>RunAtLoad</key><true/>\n"
-        "</dict>\n"
-        "</plist>\n" % (AGENT_LABEL, python_exe, publish)
-    )
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(body)
+    # A background job's output goes nowhere unless it is sent somewhere, and
+    # this is the only way to see why a Mac is not publishing.
+    log = os.path.join(script_dir, "publish.log")
+    agent = {
+        "Label": AGENT_LABEL,
+        "ProgramArguments": [python_exe, os.path.join(script_dir, "publish.py"), "--on-change"],
+        # Every minute, but a run with nothing new costs one file stat.
+        "StartInterval": 60,
+        "RunAtLoad": True,
+        "StandardOutPath": log,
+        "StandardErrorPath": log,
+    }
+    with open(path, "wb") as fh:
+        plistlib.dump(agent, fh)
     return path
+
+
+# macOS privacy protection stops a background job reading these folders, so a
+# publisher cloned into one of them installs fine and then never runs.
+PROTECTED_MAC_FOLDERS = ("Desktop", "Documents", "Downloads")
+
+
+def protected_folder(script_dir, home=None):
+    """The protected folder script_dir sits in, or None."""
+    home = (home or os.path.expanduser("~")).rstrip("/")
+    for name in PROTECTED_MAC_FOLDERS:
+        root = "%s/%s" % (home, name)  # macOS-only, so always "/"
+        if script_dir == root or script_dir.startswith(root + "/"):
+            return name
+    return None
 
 
 def schedule_command(python_exe, script_dir):
@@ -111,8 +119,11 @@ def schedule_command(python_exe, script_dir):
         target = "~/Library/LaunchAgents/%s.plist" % AGENT_LABEL
         # LaunchAgents does not exist on a fresh Mac, so create it first --
         # otherwise the copy fails and the person is stuck on step one.
-        return ('mkdir -p ~/Library/LaunchAgents && cp "%s" %s && launchctl load %s'
-                % (plist, target, target))
+        # `launchctl load` refuses an agent that is already loaded, so a second
+        # run of setup unloads the old one first.
+        return ('mkdir -p ~/Library/LaunchAgents && cp "%s" %s && '
+                '(launchctl unload %s 2>/dev/null || true) && launchctl load %s'
+                % (plist, target, target, target))
     publish = os.path.join(script_dir, "publish.py")
     return '* * * * * "%s" "%s" --on-change >/dev/null 2>&1' % (python_exe, publish)
 
@@ -125,6 +136,13 @@ def write_config(path, cfg):
 
 def main(argv=None):
     here = os.path.dirname(os.path.abspath(__file__))
+    blocked = protected_folder(here) if sys.platform == "darwin" else None
+    if blocked:
+        print("macOS won't let the background publisher read files in your %s folder.\n"
+              "Move the anki-crew folder to your home folder, then run setup again:\n\n"
+              '  mv "%s" ~/ && cd ~/anki-crew/publisher && python3 setup.py'
+              % (blocked, os.path.dirname(here)))
+        return 1
     found = find_collections()
     collection = choose_collection(found, input)
     if not collection:
@@ -141,7 +159,11 @@ def main(argv=None):
     path = os.path.join(here, "config.json")
     write_config(path, cfg)
     print("\nWrote %s" % path)
-    print("\nTest it:\n  python publish.py --dry-run")
+    py = "python" if sys.platform.startswith("win") else "python3"
+    print("\nTest it:\n  %s publish.py --dry-run" % py)
+    # --dry-run never touches the network, so without this the first real send
+    # would happen in the background, where a failure is easy to miss.
+    print("\nThen send it once for real, and check it says 'published':\n  %s publish.py" % py)
     if sys.platform.startswith("win"):
         write_task_script(here, sys.executable)
         print("\nThen turn on automatic publishing:\n  %s"

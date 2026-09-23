@@ -9,3 +9,4 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 publisher/state.json
+publisher/publish.log
