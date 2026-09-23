@@ -5,8 +5,9 @@ import CrewChart from "@/app/components/CrewChart";
 import Feed from "@/app/components/Feed";
 import PersonPanel from "@/app/components/PersonPanel";
 import StatTiles from "@/app/components/StatTiles";
-import { rankBy, totals, weekStart, windowFrom } from "@/lib/metrics";
+import { rankBy } from "@/lib/metrics";
 import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
+import { playCelebration, setSoundEnabled, soundEnabled } from "@/lib/sound";
 import type { CrewResponse, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "you";
@@ -18,12 +19,6 @@ function todayReviews(p: PersonView): number {
   return p.days.find((d) => d.date === p.meta.todayKey)?.reviews ?? 0;
 }
 
-function scoreFor(p: PersonView, range: Range): number {
-  if (range === "all") return totals(p.days).reviews;
-  if (range === "today") return todayReviews(p);
-  return totals(windowFrom(p.days, weekStart(p.meta.todayKey))).reviews;
-}
-
 export default function Page() {
   const [data, setData] = useState<CrewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +26,10 @@ export default function Page() {
   const [range, setRange] = useState<Range>("today");
   const [who, setWho] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Kept true for at least one whole rotation: a 200ms request that stops the
+  // icon a fifth of the way round reads as "it didn't work".
+  const [spinning, setSpinning] = useState(false);
+  const [sound, setSound] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [hint, setHint] = useState(false);
 
@@ -40,6 +39,8 @@ export default function Page() {
 
   const load = useCallback(async () => {
     setBusy(true);
+    setSpinning(true);
+    const startedAt = Date.now();
     try {
       const key = new URLSearchParams(window.location.search).get("key") ?? "";
       const res = await fetch(`/api/crew?key=${encodeURIComponent(key)}`, { cache: "no-store" });
@@ -50,7 +51,9 @@ export default function Page() {
       const order = rankBy(next.people, (p) => todayReviews(p)).map((p) => p.profile.id);
       const scalp = whoYouPassed(before.current, order, next.viewer);
       const names = new Map(next.people.map((p) => [p.profile.id, p.profile.displayName]));
-      setPassed(scalp ? names.get(scalp) ?? null : null);
+      const scalpName = scalp ? names.get(scalp) ?? null : null;
+      setPassed(scalpName);
+      if (scalpName) playCelebration();
 
       setData(next);
       writeSeen({
@@ -63,6 +66,8 @@ export default function Page() {
       setError("That link isn't valid. Check the key on the end of the URL, or ask JP for yours.");
     } finally {
       setBusy(false);
+      const elapsed = Date.now() - startedAt;
+      window.setTimeout(() => setSpinning(false), Math.max(0, 720 - elapsed));
     }
   }, []);
 
@@ -77,6 +82,7 @@ export default function Page() {
 
   useEffect(() => {
     try { if (!localStorage.getItem(HINT_KEY)) setHint(true); } catch { /* storage blocked */ }
+    setSound(soundEnabled());
   }, []);
 
   const dismissHint = () => {
@@ -157,7 +163,15 @@ export default function Page() {
             className="ml-1 rounded-full px-2.5 py-1.5 text-[13px] transition-colors"
             style={{ color: busy ? "var(--cyan-soft)" : "var(--ink-faint)" }}
           >
-            <span className={busy ? "inline-block animate-spin" : "inline-block"}>↻</span>
+            <span
+              className="inline-block"
+              style={{
+                transition: spinning ? "none" : "transform .2s",
+                animation: spinning ? "spin 720ms linear infinite" : "none",
+              }}
+            >
+              ↻
+            </span>
           </button>
           {/* The hint bubble is dismissed once and never returns, so shortcuts
               need a permanent way in. */}
@@ -193,7 +207,14 @@ export default function Page() {
             ))}
           </div>
           <div className="pt-2">
-            <Board people={data.people} viewer={data.viewer} range={range} seen={seenTotals} justPassed={passed} />
+            <Board
+              people={data.people}
+              viewer={data.viewer}
+              range={range}
+              seen={seenTotals}
+              justPassed={passed}
+              onSelect={(id) => { setWho(id); setTab("you"); }}
+            />
           </div>
           <StatTiles people={data.people} viewer={data.viewer} />
           <CrewChart people={data.people} />
@@ -265,6 +286,21 @@ export default function Page() {
                 ),
               )}
             </dl>
+            <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 border-t pt-3 text-[12px]"
+                   style={{ borderColor: "var(--edge)", color: "var(--ink-dim)" }}>
+              <span>
+                Sound on milestones
+                <span className="block text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
+                  Only when you overtake someone. Never on clicks.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={sound}
+                onChange={(e) => { setSound(e.target.checked); setSoundEnabled(e.target.checked); }}
+                className="h-4 w-4 accent-[color:var(--violet-soft)]"
+              />
+            </label>
           </div>
         </div>
       )}

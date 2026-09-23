@@ -60,13 +60,15 @@ function trackFor(person: PersonView): TrackDay[] {
 }
 
 export default function Board({
-  people, viewer, range, seen, justPassed,
+  people, viewer, range, seen, justPassed, onSelect,
 }: {
   people: PersonView[];
   viewer: string | null;
   range: Range;
   seen?: Record<string, number>;
   justPassed?: string | null;
+  /** Opens that person's panel. A row that reacts to a click should go somewhere. */
+  onSelect?: (id: string) => void;
 }) {
   if (people.length === 0) {
     return (
@@ -111,8 +113,10 @@ export default function Board({
               <div
                 data-testid={`row-${id}`}
                 data-you={String(you)}
+                onClick={() => onSelect?.(id)}
                 className={`lane-enter relative grid items-center gap-x-3 gap-y-1 rounded-[14px] border px-4 py-3
-                            ${passed ? "overtaken" : ""}`}
+                            transition-[transform,border-color] duration-150 active:scale-[.992]
+                            ${onSelect ? "cursor-pointer" : ""} ${passed ? "overtaken" : ""}`}
                 style={{
                   gridTemplateColumns: "26px minmax(0,1fr) auto",
                   background: lead ? "var(--pane-lift)" : "var(--pane)",
@@ -144,9 +148,15 @@ export default function Board({
                 {/* name + sync state */}
                 <div className="min-w-0">
                   <div className="flex items-baseline gap-2">
-                    <span data-testid="board-name" className="truncate text-[15px] font-semibold">
+                    <button
+                      type="button"
+                      data-testid="board-name"
+                      onClick={(e) => { e.stopPropagation(); onSelect?.(id); }}
+                      className="truncate text-left text-[15px] font-semibold hover:underline"
+                      style={{ textUnderlineOffset: "3px" }}
+                    >
                       {p.profile.displayName}
-                    </span>
+                    </button>
                     {you && (
                       <span
                         className="rounded-full px-2 py-[1px] text-[9.5px] font-medium"
