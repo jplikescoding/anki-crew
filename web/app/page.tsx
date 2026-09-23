@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Board, { type Range } from "@/app/components/Board";
 import CrewChart from "@/app/components/CrewChart";
-import Feed from "@/app/components/Feed";
+import Feed, { ago } from "@/app/components/Feed";
 import PersonPanel from "@/app/components/PersonPanel";
 import StatTiles from "@/app/components/StatTiles";
 import { Avatar, AvatarUploader } from "@/app/components/Avatar";
@@ -15,6 +15,7 @@ type Tab = "board" | "feed" | "you";
 const TABS: Tab[] = ["board", "feed", "you"];
 const RANGES: Range[] = ["today", "week", "all"];
 const HINT_KEY = "anki-crew:hinted:v1";
+const BAD_LINK = "That link isn't valid. Check the key on the end of the URL, or ask JP for yours.";
 
 function todayReviews(p: PersonView): number {
   return p.days.find((d) => d.date === p.meta.todayKey)?.reviews ?? 0;
@@ -34,12 +35,16 @@ export default function Page() {
   const [hint, setHint] = useState(false);
   const [engagement, setEngagement] = useState<Record<string, Engagement>>({});
   const [jumpSignal, setJumpSignal] = useState(0);
-  // A refresh that silently changes nothing reads as a broken button.
-  const [note, setNote] = useState<string | null>(null);
-  const lastTotal = useRef<number | null>(null);
+  // Something that went wrong after the page was already showing: a refresh
+  // that failed, or a reaction or comment the server did not keep.
+  const [problem, setProblem] = useState<string | null>(null);
+  const loaded = useRef(false);
   const [apiKey, setApiKey] = useState("");
   // Frozen for the session so highlights do not vanish while you are reading.
   const unreadSince = useRef(0);
+  // The badge, unlike the highlights, clears as soon as you open the feed.
+  const [badgeSince, setBadgeSince] = useState(0);
+  const chimedFor = useRef<string | null>(null);
 
   // What the previous visit showed, captured once so the roll-up has a floor.
   const before = useRef<Seen | null>(null);
@@ -54,12 +59,6 @@ export default function Page() {
       const res = await fetch(`/api/crew?key=${encodeURIComponent(key)}`, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const next: CrewResponse = await res.json();
-      // Compared through a ref, not through `data`. Depending on `data` here
-      // would make `load` change identity every time it ran, and the effect
-      // that calls `load` would fire again -- a refresh loop.
-      const total = next.people.reduce((n, p) => n + todayReviews(p), 0);
-      const gainedNow = lastTotal.current === null ? null : total - lastTotal.current;
-      lastTotal.current = total;
 
       if (before.current === null) before.current = readSeen();
       const order = rankBy(next.people, (p) => todayReviews(p)).map((p) => p.profile.id);
@@ -67,26 +66,37 @@ export default function Page() {
       const names = new Map(next.people.map((p) => [p.profile.id, p.profile.displayName]));
       const scalpName = scalp ? names.get(scalp) ?? null : null;
       setPassed(scalpName);
-      if (scalpName) playCelebration();
+      // `before` is fixed for the session, so every refresh finds the same
+      // overtake again. Ring once for it, not on every return to the tab.
+      if (scalpName && scalp !== chimedFor.current) {
+        chimedFor.current = scalp;
+        playCelebration();
+      }
 
       setData(next);
+      loaded.current = true;
       setEngagement(next.engagement ?? {});
       if (unreadSince.current === 0) {
         unreadSince.current = before.current?.commentsSeenAt ?? Date.now();
+        setBadgeSince(unreadSince.current);
       }
       writeSeen({
-        commentsSeenAt: before.current?.commentsSeenAt,
+        // Re-read, not taken from `before`: opening the feed moves this on,
+        // and writing the old value back would mark everything unread again.
+        commentsSeenAt: readSeen()?.commentsSeenAt,
         totals: Object.fromEntries(next.people.map((p) => [p.profile.id, todayReviews(p)])),
         order,
         at: Date.now(),
       });
       setError(null);
-      if (gainedNow !== null) {
-        setNote(gainedNow > 0 ? `+${gainedNow} new` : "nothing new yet");
-        window.setTimeout(() => setNote(null), 4000);
-      }
-    } catch {
-      setError("That link isn't valid. Check the key on the end of the URL, or ask JP for yours.");
+      setProblem(null);
+    } catch (e) {
+      // A failed refresh must not replace a dashboard that is already showing:
+      // waking a laptop fires one before the network is back.
+      if (loaded.current) setProblem("couldn't refresh — check your connection");
+      else setError(e instanceof Error && e.message === "401"
+        ? BAD_LINK
+        : "Couldn't reach the dashboard. Try again in a minute.");
     } finally {
       setBusy(false);
       const elapsed = Date.now() - startedAt;
@@ -110,6 +120,24 @@ export default function Page() {
     try { if (!localStorage.getItem(HINT_KEY)) setHint(true); } catch { /* storage blocked */ }
   }, []);
 
+  /**
+   * Sends a write the page has already shown. If the server does not keep it,
+   * reload so the screen matches what was stored, then say so -- after the
+   * reload, whose success would otherwise clear the message.
+   */
+  const send = useCallback((path: string, body: object, failed: string) => {
+    fetch(`${path}?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((res) => { if (!res.ok) throw new Error(String(res.status)); })
+      .catch(async () => {
+        await load();
+        setProblem(failed);
+      });
+  }, [apiKey, load]);
+
   /** Applied locally first: a reaction that waits on a round trip feels broken. */
   const react = useCallback((itemId: string, emoji: string | null) => {
     if (!data?.viewer) return;
@@ -120,12 +148,8 @@ export default function Page() {
       if (emoji === null) delete reactions[me]; else reactions[me] = emoji;
       return { ...prev, [itemId]: { ...cur, reactions } };
     });
-    void fetch("/api/react?key=" + encodeURIComponent(apiKey), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemId, emoji }),
-    });
-  }, [data?.viewer, apiKey]);
+    send("/api/react", { itemId, emoji }, "your reaction didn't save");
+  }, [data?.viewer, send]);
 
   const comment = useCallback((itemId: string, text: string) => {
     if (!data?.viewer) return;
@@ -134,12 +158,8 @@ export default function Page() {
       const cur = prev[itemId] ?? { reactions: {}, comments: [] };
       return { ...prev, [itemId]: { ...cur, comments: [...cur.comments, mine] } };
     });
-    void fetch("/api/comment?key=" + encodeURIComponent(apiKey), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemId, text }),
-    });
-  }, [data?.viewer, apiKey]);
+    send("/api/comment", { itemId, text }, "your comment didn't post");
+  }, [data?.viewer, send]);
 
   const dismissHint = () => {
     setHint(false);
@@ -149,12 +169,14 @@ export default function Page() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Letters are only shortcuts when you are not typing them.
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const k = e.key.toLowerCase();
       if (k === "?") { setShortcuts((s) => !s); return; }
       if (k === "escape") { setShortcuts(false); return; }
-      if (k === "1") setTab("board");
-      else if (k === "2") setTab("feed");
-      else if (k === "3") setTab("you");
+      if (k === "1") { setTab("board"); setJumpSignal(0); }
+      else if (k === "2") { setTab("feed"); setJumpSignal(0); }
+      else if (k === "3") { setTab("you"); setJumpSignal(0); }
       else if (k === "t") setRange("today");
       else if (k === "w") setRange("week");
       else if (k === "a") setRange("all");
@@ -168,8 +190,10 @@ export default function Page() {
   // can still see which ones were new.
   useEffect(() => {
     if (tab !== "feed") return;
+    const at = Date.now();
+    setBadgeSince(at);
     const prev = readSeen();
-    if (prev) writeSeen({ ...prev, commentsSeenAt: Date.now() });
+    if (prev) writeSeen({ ...prev, commentsSeenAt: at });
   }, [tab]);
 
   if (error) {
@@ -189,7 +213,7 @@ export default function Page() {
 
   const selected = data.people.find((p) => p.profile.id === (who ?? data.viewer)) ?? data.people[0];
   const unreadComments = Object.values(engagement).reduce(
-    (n, e) => n + e.comments.filter((c) => c.at > unreadSince.current && c.user !== data.viewer).length,
+    (n, e) => n + e.comments.filter((c) => c.at > badgeSince && c.user !== data.viewer).length,
     0);
   const me = data.people.find((p) => p.profile.id === data.viewer);
   const gained = me ? todayReviews(me) - (before.current?.totals[me.profile.id] ?? todayReviews(me)) : 0;
@@ -205,13 +229,16 @@ export default function Page() {
               +{gained.toLocaleString()} since you last looked
             </p>
           )}
+          {/* Your stats land a minute or two after you close Anki, so "when did
+              mine last arrive" is what a refresh is really asking. */}
+          {(problem || me) && (
+            <p data-testid="sync-note" className="mt-0.5 text-[11.5px]"
+               style={{ color: problem ? "var(--rose)" : "var(--ink-dim)" }}>
+              {problem ?? `you published ${ago(me!.meta.lastPublishAt, Date.now())} ago`}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-1">
-          {note && (
-            <span data-testid="sync-note" className="mr-1 text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
-              {note}
-            </span>
-          )}
           <nav className="flex gap-1 text-[11.5px]">
             {TABS.map((t) => (
               <button
@@ -219,6 +246,7 @@ export default function Page() {
                 onClick={() => {
                   setTab(t);
                   if (t === "feed" && unreadComments > 0) setJumpSignal((n) => n + 1);
+                  else setJumpSignal(0);
                 }}
                 aria-pressed={tab === t}
                 className="relative rounded-full px-3 py-1.5 capitalize transition-colors"

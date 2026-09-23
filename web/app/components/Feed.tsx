@@ -11,7 +11,7 @@ const MAX_COMMENT_CHARS = 280;
  * from a previously rounded one, so a card reviewed 23½ hours ago reads as
  * hours and not as a day.
  */
-function ago(ts: number, now: number): string {
+export function ago(ts: number, now: number): string {
   const ms = Math.max(0, now - ts);
   const mins = Math.round(ms / 60000);
   if (mins < 60) return `${mins}m`;
@@ -38,8 +38,10 @@ export default function Feed({
   const [only, setOnly] = useState<string | null>(null);
   const [quizzed, setQuizzed] = useState<Set<string>>(new Set());
   const [openThread, setOpenThread] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  // Keyed by card, so a half-written comment stays on the card it was for.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const unreadRef = useRef<HTMLLIElement | null>(null);
+  const jumpedFor = useRef(0);
 
   const byId = useMemo(() => new Map(people.map((p) => [p.profile.id, p])), [people]);
   const indexOf = useMemo(
@@ -56,8 +58,11 @@ export default function Feed({
     return null;
   }, [items, engagement, unreadSince, viewer]);
 
+  // Once per bump: a refresh that moves the first unread card must not drag
+  // you away from whatever you are reading.
   useEffect(() => {
-    if (jumpSignal > 0 && unreadRef.current) {
+    if (jumpSignal > 0 && jumpSignal !== jumpedFor.current && unreadRef.current) {
+      jumpedFor.current = jumpSignal;
       unreadRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       if (firstUnreadId) setOpenThread(firstUnreadId);
     }
@@ -71,10 +76,10 @@ export default function Feed({
     });
 
   const submit = (itemId: string) => {
-    const text = draft.trim();
+    const text = (drafts[itemId] ?? "").trim();
     if (!text) return;
     onComment?.(itemId, text);
-    setDraft("");
+    setDrafts((prev) => ({ ...prev, [itemId]: "" }));
   };
 
   const canWrite = Boolean(apiKey && viewer);
@@ -127,6 +132,7 @@ export default function Feed({
             const mine = viewer ? reactions[viewer] : undefined;
             const newOnes = comments.filter((c) => c.at > unreadSince && c.user !== viewer).length;
             const open = openThread === item.id;
+            const draft = drafts[item.id] ?? "";
 
             // Group the reactions so five people pressing 🔥 reads as one 🔥 ×5.
             const tally = new Map<string, string[]>();
@@ -253,7 +259,7 @@ export default function Feed({
                           data-testid={`comment-input-${item.id}`}
                           value={draft}
                           maxLength={MAX_COMMENT_CHARS}
-                          onChange={(ev) => setDraft(ev.target.value)}
+                          onChange={(ev) => setDrafts((prev) => ({ ...prev, [item.id]: ev.target.value }))}
                           onKeyDown={(ev) => { if (ev.key === "Enter") submit(item.id); }}
                           placeholder="Add a comment"
                           className="min-w-0 flex-1 rounded-lg border bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"

@@ -119,6 +119,48 @@ describe("comments", () => {
   });
 });
 
+describe("drafts", () => {
+  const other: FeedItem = { ...card, id: "peter:2", front: "食べる", back: "to eat" };
+
+  function twoCards() {
+    const onComment = vi.fn();
+    render(<Feed items={[card, other]} people={people} engagement={{}} viewer="jp" apiKey="key_jp" onComment={onComment} />);
+    return { onComment };
+  }
+
+  it("stay with the card you wrote them on", () => {
+    const { onComment } = twoCards();
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    fireEvent.change(screen.getByTestId("comment-input-peter:1"), { target: { value: "half a thought" } });
+
+    fireEvent.click(screen.getByTestId("thread-peter:2"));
+    const second = screen.getByTestId("comment-input-peter:2") as HTMLInputElement;
+    expect(second.value).toBe("");
+    fireEvent.keyDown(second, { key: "Enter" });
+    expect(onComment).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    expect((screen.getByTestId("comment-input-peter:1") as HTMLInputElement).value).toBe("half a thought");
+  });
+});
+
+describe("jumping to the first unread comment", () => {
+  it("happens once per request, not again when new comments arrive", () => {
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    const other: FeedItem = { ...card, id: "peter:0", ts: card.ts + 1000 };
+    const unread = (id: string) => ({ [id]: { reactions: {}, comments: [{ user: "peter", text: "hi", at: 5000 }] } });
+    const props = { items: [other, card], people, viewer: "jp", apiKey: "key_jp", unreadSince: 1000, jumpSignal: 1 };
+
+    const r = render(<Feed {...props} engagement={unread("peter:1")} />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+
+    // A refresh brings a newer unread comment on an earlier card.
+    r.rerender(<Feed {...props} engagement={{ ...unread("peter:1"), ...unread("peter:0") }} />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    scroll.mockRestore();
+  });
+});
+
 describe("read-only viewing", () => {
   it("hides the reaction buttons nobody has used when you cannot write", () => {
     render(<Feed items={[card]} people={people} engagement={{}} />);
