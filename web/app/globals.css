@@ -1,10 +1,119 @@
 @import "tailwindcss";
 
-:root { color-scheme: dark; }
+/*
+  Anki Crew — "Aurora Glass".
+  The gradient mesh is a ground, never decoration. Every other colour in here
+  carries meaning: violet→cyan is volume, gold is a streak, jade is retention,
+  rose is a lapse. If a colour is not saying one of those things, it is grey.
+*/
+:root {
+  color-scheme: dark;
+
+  --ground: #070912;
+  --ground-lift: #0B0E1B;
+
+  --ink: #F3F5FA;
+  --ink-dim: #A5AEC4;
+  --ink-faint: #6B7490;
+  --ink-ghost: #444D66;
+
+  --violet: #7C3AED;
+  --violet-soft: #A78BFA;
+  --cyan: #22D3EE;
+  --cyan-soft: #67E8F9;
+
+  --gold: #FBBF24;
+  --jade: #34D399;
+  --rose: #FB7185;
+
+  --pane: rgba(255, 255, 255, 0.055);
+  --pane-lift: rgba(255, 255, 255, 0.085);
+  --edge: rgba(255, 255, 255, 0.09);
+  --edge-lit: rgba(167, 139, 250, 0.32);
+
+  --r-lane: 14px;
+  --r-pill: 999px;
+}
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
-  background: #0b0d10;
-  color: #e6e8eb;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-feature-settings: "tnum" 1;
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 380px at 4% -12%, rgba(124, 58, 237, 0.30), transparent 60%),
+    radial-gradient(900px 340px at 100% 2%, rgba(6, 182, 212, 0.20), transparent 58%),
+    var(--ground);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Japanese is the content, not an accent. It gets its own face and more room. */
+.jp {
+  font-family: var(--font-zen), var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: normal;
+  letter-spacing: 0.01em;
+}
+
+/* Volume is the one thing the gradient is allowed to describe. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(96deg, var(--violet-soft), var(--cyan-soft));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.figure-plain {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.pane {
+  background: var(--pane);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-lane);
+}
+
+/* A metric you can ask about. The dotted rule is the affordance. */
+.defined {
+  text-decoration: underline dotted var(--ink-ghost);
+  text-underline-offset: 4px;
+  cursor: help;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cyan-soft);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The one orchestrated moment: numbers climbing to what you earned while away. */
+@keyframes lane-settle {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.lane-enter { animation: lane-settle 420ms cubic-bezier(.22,.8,.3,1) both; }
+
+@keyframes overtake-sweep {
+  0%   { background-position: -120% 0; }
+  100% { background-position: 220% 0; }
+}
+.overtaken {
+  background-image: linear-gradient(100deg, transparent 20%, rgba(167,139,250,.22) 50%, transparent 80%);
+  background-size: 220% 100%;
+  animation: overtake-sweep 1100ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

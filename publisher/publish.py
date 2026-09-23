@@ -20,9 +20,44 @@ from collection_paths import find_collections
 from daybuckets import today_key
 
 REQUIRED_KEYS = ("user", "displayName", "endpoint", "token")
+
+# The task runs every minute but only publishes once your collection has gone
+# quiet, so in practice it sends one payload a minute or so after you close
+# Anki. A run that finds nothing new costs one file stat and exits.
+QUIET_SECONDS = 45
+# ...except during a long session, where the dashboard should climb as you go
+# rather than jumping when you finally quit.
+SESSION_UPDATE_SECONDS = 300
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
 # Exit codes: 2 config, 3 schema, 4 network.
 EXIT_UNREADABLE_COLLECTION = 5
 DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+
+def read_state(path=STATE_FILE):
+    """Last-published bookkeeping. A missing or damaged file just means 'publish'."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            state = json.load(fh)
+        return state if isinstance(state, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_state(path, state):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
+    os.replace(tmp, path)
+
+
+def should_publish(mtime, last_mtime, last_publish_at, now):
+    """Has this collection changed, and has it settled enough to be worth sending?"""
+    if last_mtime is not None and mtime <= last_mtime:
+        return False
+    settled = (now - mtime) >= QUIET_SECONDS
+    overdue = last_publish_at is None or (now - last_publish_at) >= SESSION_UPDATE_SECONDS
+    return settled or overdue
 
 
 class ConfigError(Exception):
@@ -86,6 +121,9 @@ def main(argv=None):
     parser.add_argument("--config", default=DEFAULT_CONFIG)
     parser.add_argument("--dry-run", action="store_true",
                         help="print the payload instead of sending it")
+    parser.add_argument("--on-change", action="store_true",
+                        help="only publish once the collection has changed and gone quiet; "
+                             "this is what the scheduled task runs every minute")
     args = parser.parse_args(argv)
 
     try:
@@ -94,6 +132,18 @@ def main(argv=None):
     except ConfigError as exc:
         print("config error: %s" % exc, file=sys.stderr)
         return 2
+
+    mtime = None
+    if args.on_change:
+        try:
+            mtime = os.path.getmtime(src)
+        except OSError as exc:
+            print("cannot read collection at %s: %s" % (src, exc), file=sys.stderr)
+            return EXIT_UNREADABLE_COLLECTION
+        state = read_state()
+        if not should_publish(mtime, state.get("lastMtime"),
+                              state.get("lastPublishAt"), time.time()):
+            return 0  # nothing new, or you are still studying
 
     try:
         con, tmpdir = anki_reader.open_collection_copy(src)
@@ -125,6 +175,9 @@ def main(argv=None):
     except urllib.error.URLError as exc:
         print("publish failed: %s" % exc.reason, file=sys.stderr)
         return 4
+
+    if args.on_change and mtime is not None:
+        write_state(STATE_FILE, {"lastMtime": mtime, "lastPublishAt": time.time()})
 
     today = today_key(rollover)
     todays = next((d for d in payload["days"] if d["date"] == today), None)

@@ -25,14 +25,16 @@ def choose_collection(found, prompt):
 def schedule_command(python_exe, script_dir):
     script = os.path.join(script_dir, "publish.py")
     if sys.platform.startswith("win"):
-        # pythonw.exe has no console, so the hourly task does not flash a
-        # window on the user's desktop every hour.
+        # Runs every minute, but --on-change means a run with nothing new costs
+        # one file stat and exits: no network, no database, no window. pythonw.exe
+        # has no console, so nothing ever flashes on the desktop.
         quiet = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
         if os.path.exists(quiet):
             python_exe = quiet
-        return ('schtasks /create /tn %s /sc hourly /f /tr "\\"%s\\" \\"%s\\""'
+        return ('schtasks /create /tn %s /sc minute /mo 1 /f '
+                '/tr "\\"%s\\" \\"%s\\" --on-change"'
                 % (TASK_NAME, python_exe, script))
-    return '0 * * * * "%s" "%s" >/dev/null 2>&1' % (python_exe, script)
+    return '* * * * * "%s" "%s" --on-change >/dev/null 2>&1' % (python_exe, script)
 
 
 def write_config(path, cfg):

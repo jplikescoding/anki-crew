@@ -17,11 +17,12 @@ class TestChooseCollection(unittest.TestCase):
 
 
 class TestScheduleCommand(unittest.TestCase):
-    def test_windows_uses_schtasks_hourly(self):
+    def test_windows_uses_schtasks_every_minute(self):
         with mock.patch.object(S.sys, "platform", "win32"):
             cmd = S.schedule_command("python.exe", r"C:\anki-crew\publisher")
         self.assertIn("schtasks", cmd)
-        self.assertIn("/sc hourly", cmd.lower())
+        self.assertIn("/sc minute", cmd.lower())
+        self.assertIn("--on-change", cmd)
         self.assertIn("AnkiCrewPublish", cmd)
 
     def test_windows_prefers_pythonw_so_no_console_flashes_hourly(self):
@@ -43,7 +44,8 @@ class TestScheduleCommand(unittest.TestCase):
     def test_unix_prints_a_cron_line(self):
         with mock.patch.object(S.sys, "platform", "darwin"):
             cmd = S.schedule_command("/usr/bin/python3", "/home/x/anki-crew/publisher")
-        self.assertTrue(cmd.startswith("0 * * * *"))
+        self.assertTrue(cmd.startswith("* * * * *"))
+        self.assertIn("--on-change", cmd)
         self.assertIn("publish.py", cmd)
 
 
