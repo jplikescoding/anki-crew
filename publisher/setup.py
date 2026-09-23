@@ -22,19 +22,96 @@ def choose_collection(found, prompt):
     return str(found[index]) if 0 <= index < len(found) else str(found[0])
 
 
-def schedule_command(python_exe, script_dir):
-    script = os.path.join(script_dir, "publish.py")
+def quiet_python(python_exe):
+    """pythonw.exe runs with no console, so nothing flashes on the desktop."""
     if sys.platform.startswith("win"):
-        # Runs every minute, but --on-change means a run with nothing new costs
-        # one file stat and exits: no network, no database, no window. pythonw.exe
-        # has no console, so nothing ever flashes on the desktop.
         quiet = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
         if os.path.exists(quiet):
-            python_exe = quiet
-        return ('schtasks /create /tn %s /sc minute /mo 1 /f '
-                '/tr "\\"%s\\" \\"%s\\" --on-change"'
-                % (TASK_NAME, python_exe, script))
-    return '* * * * * "%s" "%s" --on-change >/dev/null 2>&1' % (python_exe, script)
+            return quiet
+    return python_exe
+
+
+def write_task_script(script_dir, python_exe):
+    """
+    Writes a PowerShell installer for the scheduled task and returns its path.
+
+    Windows scheduling is written to a file rather than printed as a one-liner
+    because the `schtasks` form needs nested escaped quotes that PowerShell and
+    Git Bash both mangle -- it works only in cmd.exe, which is not where anyone
+    is standing any more. A file you can read before running it is also easier
+    to trust than a wall of escaping.
+    """
+    publish = os.path.join(script_dir, "publish.py")
+    path = os.path.join(script_dir, "install_task.ps1")
+    body = (
+        "# Publishes your Anki stats once your collection goes quiet.\n"
+        "# Runs every minute, but does nothing at all unless you have studied.\n"
+        "$action  = New-ScheduledTaskAction -Execute '%s' -Argument '\"%s\" --on-change'\n"
+        "$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) "
+        "-RepetitionInterval (New-TimeSpan -Minutes 1) "
+        "-RepetitionDuration (New-TimeSpan -Days 3650)\n"
+        "$set     = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries "
+        "-DontStopIfGoingOnBatteries -StartWhenAvailable "
+        "-ExecutionTimeLimit (New-TimeSpan -Minutes 5)\n"
+        "Register-ScheduledTask -TaskName '%s' -Action $action -Trigger $trigger "
+        "-Settings $set -Force | Out-Null\n"
+        "Write-Host 'Installed. It will publish a minute or two after you close Anki.'\n"
+        % (quiet_python(python_exe), publish, TASK_NAME)
+    )
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    return path
+
+
+AGENT_LABEL = "com.ankicrew.publish"
+
+
+def write_agent_plist(script_dir, python_exe):
+    """
+    Writes a launchd agent and returns its path.
+
+    launchd rather than cron because both of these machines are laptops: cron
+    does not run while a Mac is asleep and never catches up afterwards, so a
+    lid that stays shut until Thursday would simply lose the week. launchd
+    fires a missed StartInterval when the machine wakes.
+    """
+    publish = os.path.join(script_dir, "publish.py")
+    path = os.path.join(script_dir, "%s.plist" % AGENT_LABEL)
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0">\n'
+        "<dict>\n"
+        "  <key>Label</key><string>%s</string>\n"
+        "  <key>ProgramArguments</key>\n"
+        "  <array>\n"
+        "    <string>%s</string>\n"
+        "    <string>%s</string>\n"
+        "    <string>--on-change</string>\n"
+        "  </array>\n"
+        "  <!-- Every minute, but a run with nothing new costs one file stat. -->\n"
+        "  <key>StartInterval</key><integer>60</integer>\n"
+        "  <key>RunAtLoad</key><true/>\n"
+        "</dict>\n"
+        "</plist>\n" % (AGENT_LABEL, python_exe, publish)
+    )
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    return path
+
+
+def schedule_command(python_exe, script_dir):
+    """The command a person runs to turn on automatic publishing."""
+    if sys.platform.startswith("win"):
+        return 'powershell -ExecutionPolicy Bypass -File "%s"' % os.path.join(
+            script_dir, "install_task.ps1")
+    if sys.platform == "darwin":
+        plist = os.path.join(script_dir, "%s.plist" % AGENT_LABEL)
+        target = "~/Library/LaunchAgents/%s.plist" % AGENT_LABEL
+        return 'cp "%s" %s && launchctl load %s' % (plist, target, target)
+    publish = os.path.join(script_dir, "publish.py")
+    return '* * * * * "%s" "%s" --on-change >/dev/null 2>&1' % (python_exe, publish)
 
 
 def write_config(path, cfg):
@@ -62,7 +139,17 @@ def main(argv=None):
     write_config(path, cfg)
     print("\nWrote %s" % path)
     print("\nTest it:\n  python publish.py --dry-run")
-    print("\nThen schedule it hourly:\n  %s" % schedule_command(sys.executable, here))
+    if sys.platform.startswith("win"):
+        write_task_script(here, sys.executable)
+        print("\nThen turn on automatic publishing:\n  %s"
+              % schedule_command(sys.executable, here))
+    elif sys.platform == "darwin":
+        write_agent_plist(here, sys.executable)
+        print("\nThen turn on automatic publishing:\n  %s"
+              % schedule_command(sys.executable, here))
+    else:
+        print("\nThen add this line to your crontab (`crontab -e`):\n  %s"
+              % schedule_command(sys.executable, here))
     return 0
 
 
