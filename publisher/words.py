@@ -68,10 +68,9 @@ def word_index(con):
     words = {}
     for _mid, flds, rank in _live_notes(con).values():
         for raw in (flds or "").split(SEP):
-            cleaned = clean_rich(raw)
-            if not (0 < len(cleaned) <= MAX_WORD_LEN) or not _JAPANESE.search(cleaned):
+            word = normalize_word(clean_rich(raw))
+            if not (0 < len(word) <= MAX_WORD_LEN) or not _JAPANESE.search(word):
                 continue
-            word = normalize_word(cleaned)
             if word not in words or rank < words[word]:
                 words[word] = rank
     out = {name: [] for name in _RANKS}

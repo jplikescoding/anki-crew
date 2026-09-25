@@ -25,11 +25,20 @@ class TestWordIndex(unittest.TestCase):
     def test_indexes_word_kana_and_furigana_but_not_sentences(self):
         con = _con()
         add_note(con, 1, 7, ["近く", "vicinity", "近[ちか]く",
-                             "私の家は駅の<b>近く</b>です。とても便利。"])
+                             "私の家は駅の<b>近く</b>です。毎朝歩いて行けるのでとても便利です。"])
         add_card(con, 10, 1, 5, ctype=2, queue=2, ivl=30)
         idx = W.word_index(con)
         self.assertEqual(idx["known"], ["近く"])
         self.assertEqual((idx["learning"], idx["new"]), ([], []))
+
+    def test_includes_bold_words_that_normalize_to_short_form(self):
+        con = _con()
+        # This field is 21 chars raw but only 14 chars after removing <b> tags.
+        # It should be indexed because the normalized length is ≤ MAX_WORD_LEN.
+        add_note(con, 1, 7, ["<b>" + "話" * 14 + "</b>", "", "", ""])
+        add_card(con, 10, 1, 5, ctype=2, queue=2, ivl=30)
+        idx = W.word_index(con)
+        self.assertEqual(idx["known"], ["話" * 14])
 
     def test_skips_fields_without_japanese(self):
         con = _con()
