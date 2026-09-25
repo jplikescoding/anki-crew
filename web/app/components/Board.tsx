@@ -2,11 +2,12 @@
 import {
   crewDailyTotals, gapToNext, rankBy, rankDeltas, retention, shiftDays, totals, weekStart, windowFrom,
 } from "@/lib/metrics";
+import type { Range } from "@/lib/metrics";
 import type { DayRow, PersonView } from "@/lib/types";
 import { Avatar } from "@/app/components/Avatar";
 import { CountUp, StreakStar, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
 
-export type Range = "today" | "week" | "all";
+export type { Range };
 
 const STALE_AFTER_MS = 1000 * 60 * 60 * 6;
 
@@ -86,7 +87,7 @@ export default function Board({
 
   const score = (p: PersonView) => totals(daysFor(p, range)).reviews;
   const ranked = rankBy(people, score);
-  const deltas = rankDeltas(people, people[0].meta.todayKey);
+  const deltas = rankDeltas(people, range);
   const gap = gapToNext(people, viewer, score);
   const crewToday = crewDailyTotals(people, people[0].meta.todayKey, 1)[0]?.total ?? 0;
   // Only zones that differ from the viewer's get a tag: labelling everyone is

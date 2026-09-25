@@ -69,4 +69,20 @@ describe("Board", () => {
     render(<Board people={[]} viewer={null} range="today" />);
     expect(screen.getByTestId("board-empty")).toBeTruthy();
   });
+
+  it("moves the arrows with the range", () => {
+    // JP overtook Andy today, but Andy's big day earlier in the week keeps him
+    // ahead on the week both yesterday and today.
+    const jp = person("jp", "JP", "America/New_York",
+      [day("2026-09-20", { reviews: 0 }), day("2026-09-21", { reviews: 200 })]);
+    const andy = person("andy", "Andy", "America/New_York",
+      [day("2026-09-16", { reviews: 900 }), day("2026-09-20", { reviews: 50 })]);
+    const { rerender } = render(<Board people={[jp, andy]} viewer="jp" range="today" />);
+    expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+    expect(screen.getByTestId("delta-andy").textContent).toBe("▼1");
+
+    rerender(<Board people={[jp, andy]} viewer="jp" range="week" />);
+    expect(screen.queryByTestId("delta-jp")).toBeNull();
+    expect(screen.queryByTestId("delta-andy")).toBeNull();
+  });
 });
