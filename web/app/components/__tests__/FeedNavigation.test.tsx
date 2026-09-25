@@ -117,6 +117,27 @@ describe("Mark all read", () => {
   });
 });
 
+describe("marking a thread read only while it's shown", () => {
+  it("doesn't mark it read while a filter hides its card", () => {
+    const onSeen = vi.fn();
+    const r = render(<Feed {...base} engagement={{}} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("thread-adam:1"));
+    fireEvent.click(screen.getByTestId("chip-jp"));
+    r.rerender(<Feed {...base} engagement={{ "adam:1": say(800) }} onSeen={onSeen} />);
+    expect(onSeen).not.toHaveBeenCalled();
+  });
+
+  it("marks it read once the filter clears and the card is shown again", () => {
+    const onSeen = vi.fn();
+    const r = render(<Feed {...base} engagement={{}} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("thread-adam:1"));
+    fireEvent.click(screen.getByTestId("chip-jp"));
+    r.rerender(<Feed {...base} engagement={{ "adam:1": say(800) }} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("chip-jp"));
+    expect(onSeen).toHaveBeenCalledWith("adam:1", 800);
+  });
+});
+
 describe("back to top", () => {
   it("appears once you've scrolled a screen down, and takes you up", () => {
     const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});

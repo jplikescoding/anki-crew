@@ -158,9 +158,13 @@ export default function Feed({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // Having a thread open is reading it, including comments that land while it is.
+  // Having a thread open is reading it, including comments that land while it
+  // is -- but only while its card is actually on screen. A filter change can
+  // leave it open without rendering it; the thread stays open so it resumes
+  // correctly if the filter clears, and gets marked read once it's shown again.
   useEffect(() => {
     if (!openThread || !onSeen) return;
+    if (!shown.slice(0, limit).some((i) => i.id === openThread)) return;
     const fresh = (engagement[openThread]?.comments ?? [])
       .filter((c) => isUnread(c, openThread, me, seen));
     if (fresh.length === 0) return;
@@ -168,7 +172,7 @@ export default function Feed({
     if (asked.current.get(openThread) === upTo) return;
     asked.current.set(openThread, upTo);
     onSeen(openThread, upTo);
-  }, [openThread, engagement, seen, me, onSeen]);
+  }, [openThread, engagement, seen, me, onSeen, shown, limit]);
 
   const toggleQuiz = (id: string) =>
     setQuizzed((prev) => {

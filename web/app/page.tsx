@@ -118,6 +118,10 @@ export default function Page() {
    * Sends a write the page has already shown. If the server does not keep it,
    * reload so the screen matches what was stored, then say so -- after the
    * reload, whose success would otherwise clear the message.
+   *
+   * Except /api/seen: mergeSeen keeps the local read mark through that
+   * reload, on purpose, so a failed save can't ask again, fail again, and
+   * reload forever.
    */
   const send = useCallback((path: string, body: object, failed: string) => {
     fetch(`${path}?key=${encodeURIComponent(apiKey)}`, {
