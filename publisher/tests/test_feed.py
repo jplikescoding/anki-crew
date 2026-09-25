@@ -191,6 +191,15 @@ class TestFeedItemFields(unittest.TestCase):
         item = F.feed_items(con, DECKS, "jp")[0]
         self.assertEqual((item["noteType"], item["fields"]), ("", {}))
 
+    def test_trims_a_long_note_type_name(self):
+        con = _seeded()
+        add_notetype(con, 7, "x" * 150, VOCAB)
+        add_note(con, 100, 7, ["話す", "to speak"])
+        add_card(con, 200, 100, 5)
+        add_review(con, ms(datetime(2026, 9, 21, 10, 0)), 200)
+        item = F.feed_items(con, DECKS, "jp")[0]
+        self.assertEqual(item["noteType"], "x" * F.MAX_NOTE_TYPE_LEN)
+
 
 if __name__ == "__main__":
     unittest.main()

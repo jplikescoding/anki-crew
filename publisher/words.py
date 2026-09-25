@@ -10,7 +10,7 @@ import json
 import re
 
 import anki_reader
-from feed import SEP, clean_rich
+from feed import SEP, clean_rich, MAX_NOTE_TYPE_LEN
 
 MAX_WORD_LEN = 20
 MAX_WORDS = 50000
@@ -63,7 +63,7 @@ def note_types(con):
     out = {}
     for mid in mids[:MAX_NOTE_TYPES]:
         if mid in names:
-            out[names[mid]] = fields.get(mid, [])[:MAX_FIELD_NAMES]
+            out[names[mid][:MAX_NOTE_TYPE_LEN]] = fields.get(mid, [])[:MAX_FIELD_NAMES]
     return out
 
 

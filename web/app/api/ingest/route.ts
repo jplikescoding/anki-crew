@@ -62,7 +62,7 @@ function looksLikeFeedItem(value: unknown): boolean {
   const c = value as Record<string, unknown>;
   return typeof c.id === "string" && typeof c.front === "string"
     && typeof c.ts === "number"
-    && (c.noteType === undefined || (typeof c.noteType === "string" && c.noteType.length <= 100))
+    && (c.noteType === undefined || (typeof c.noteType === "string" && [...c.noteType].length <= 100))
     && (c.fields === undefined || looksLikeFields(c.fields));
 }
 

@@ -11,6 +11,7 @@ SEP = "\x1f"
 MAX_LEN = 120
 MAX_FIELD_LEN = 200
 MAX_FIELDS = 30
+MAX_NOTE_TYPE_LEN = 100
 
 _BOLD_OPEN = re.compile(r"<b>", re.I)
 _BOLD_CLOSE = re.compile(r"</b>", re.I)
@@ -91,7 +92,7 @@ def feed_items(con, decks, user_id, limit=200):
                     "front": front, "back": back,
                     "deck": decks.get(did, "Unknown"),
                     "ease": ease, "ivl": ivl or 0, "ts": rid,
-                    "noteType": ntnames.get(mid, ""),
+                    "noteType": ntnames.get(mid, "")[:MAX_NOTE_TYPE_LEN],
                     "fields": note_fields(flds, fnames.get(mid, []))})
         if len(out) >= limit:
             break

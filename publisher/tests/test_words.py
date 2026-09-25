@@ -148,6 +148,14 @@ class TestNoteTypes(unittest.TestCase):
         add_card(con, 11, 2, 5, queue=-1)
         self.assertEqual(W.note_types(con), {"Japanese Vocab Dynamic": VOCAB})
 
+    def test_trims_a_long_note_type_name(self):
+        con = build_db(os.path.join(tempfile.mkdtemp(), "c.anki2"))
+        add_deck(con, 5, "Core")
+        add_notetype(con, 7, "x" * 150, VOCAB)
+        add_note(con, 1, 7, ["話す", "", "", ""])
+        add_card(con, 10, 1, 5)
+        self.assertEqual(list(W.note_types(con)), ["x" * W.MAX_NOTE_TYPE_LEN])
+
 
 class TestWordsHash(unittest.TestCase):
     def test_same_index_same_hash_and_any_change_differs(self):

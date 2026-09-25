@@ -185,6 +185,12 @@ describe("POST /api/ingest", () => {
     expect((await POST(req(payload))).status).toBe(200);
   });
 
+  it("accepts a noteType of 100 non-BMP characters, measured in code points", async () => {
+    const payload = contract();
+    payload.recentCards[0].noteType = "😀".repeat(100);
+    expect((await POST(req(payload))).status).toBe(200);
+  });
+
   it.each([
     ["fields that aren't strings", (p: any) => { p.recentCards[0].fields = { A: 5 }; }],
     ["too many fields", (p: any) => {
