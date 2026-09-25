@@ -12,9 +12,7 @@ export const NOTES: Note[] = [
     date: "September 2026",
     title: "Board fixes",
     items: [
-      "Today resets for everyone at their own 4am, even if they haven't synced yet. No more yesterday's cards counting as today.",
-      "The ▲▼ arrows now follow Today / Week / All time.",
-      "Tap anyone to see their best day, with the year.",
+      "Today resets properly at 4am for everyone, the ▲▼ arrows follow Today/Week/All time, and tapping anyone shows their best day (with the year).",
     ],
   },
   {
