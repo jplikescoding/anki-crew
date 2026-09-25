@@ -17,7 +17,7 @@
 - Colours only from the "Aurora Glass" tokens in `web/app/globals.css`: rose = miss, jade = got it / caught up, cyan = new/unread. Anything else is grey (`--ink-*`).
 - Motion 150–220 ms for interactions; the global `prefers-reduced-motion` rule in `globals.css` already neutralises CSS animation; JS scrolling must use `scrollBehavior()` (Task 8).
 - Touch targets on the filter bar ≥ 32 px (`min-h-8`).
-- Floor = `max(SHIP_FLOOR = Date.UTC(2026, 8, 18), joinedAt − 7 days, stored _floor)`, computed on every read.
+- Floor = the stored Mark-all-read time, else 0. No starting cutoff: every comment by someone else is unread until opened, including for late joiners.
 - Every "mark read" carries `upTo` (newest comment time the client showed); the server stores `min(upTo, now)`, and stored read times only ever increase.
 - `itemId` accepted by APIs: non-empty string, ≤ 128 chars, not `"_floor"`.
 - Page size = 30.
@@ -257,9 +257,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `FLOOR`, `SeenMap` from `@/lib/unread` (Task 1).
 - Produces:
-  - `SHIP_FLOOR = Date.UTC(2026, 8, 18)`
-  - `JOIN_GRACE_MS = 7 * 24 * 60 * 60 * 1000`
-  - `getSeen(userId: string, joinedAt?: number): Promise<SeenMap>`. The result always includes `_floor = max(SHIP_FLOOR, joinedAt − JOIN_GRACE_MS, stored _floor)`.
+  - `getSeen(userId: string): Promise<SeenMap>`. The result always includes `_floor` (the stored Mark-all-read time, else 0).
   - `markSeen(userId: string, itemId: string, at: number): Promise<void>`. Never lowers a stored time.
   - `markAllSeen(userId: string, at: number): Promise<void>`. Raises the stored `_floor` and never lowers it.
 
@@ -273,7 +271,7 @@ In `web/lib/__tests__/store.test.ts`, inside the mocked `Redis` class, directly 
     }
 ```
 
-Add `getSeen, markSeen, markAllSeen, SHIP_FLOOR, JOIN_GRACE_MS` to the existing `import { … } from "@/lib/store";` list.
+Add `getSeen, markSeen, markAllSeen` to the existing `import { … } from "@/lib/store";` list.
 
 - [ ] **Step 2: Write the failing tests** (append to the end of the file)
 
@@ -281,22 +279,13 @@ Add `getSeen, markSeen, markAllSeen, SHIP_FLOOR, JOIN_GRACE_MS` to the existing 
 describe("read state", () => {
   beforeEach(() => { state.hashes.clear(); });
 
-  it("starts everyone at a fixed line, however long they've been away", async () => {
-    expect((await getSeen("jp"))._floor).toBe(SHIP_FLOOR);
-  });
-
-  it("starts someone who joined later a week before they joined", async () => {
-    const joinedAt = SHIP_FLOOR + 60 * JOIN_GRACE_MS;
-    expect((await getSeen("peter", joinedAt))._floor).toBe(joinedAt - JOIN_GRACE_MS);
-  });
-
-  it("keeps the fixed line for someone who joined before it", async () => {
-    expect((await getSeen("jp", SHIP_FLOOR - JOIN_GRACE_MS))._floor).toBe(SHIP_FLOOR);
+  it("leaves every comment unread for someone who hasn't read anything, however old", async () => {
+    expect(await getSeen("peter")).toEqual({ _floor: 0 });
   });
 
   it("remembers how far each thread was read", async () => {
-    await markSeen("jp", "peter:1", SHIP_FLOOR + 5000);
-    expect((await getSeen("jp"))["peter:1"]).toBe(SHIP_FLOOR + 5000);
+    await markSeen("jp", "peter:1", 5000);
+    expect((await getSeen("jp"))["peter:1"]).toBe(5000);
   });
 
   it("never moves a thread backwards, so a stale device can't un-read it", async () => {
@@ -311,7 +300,7 @@ describe("read state", () => {
   });
 
   it("raises the floor when everything is marked read, and never lowers it", async () => {
-    const later = SHIP_FLOOR + 10 * JOIN_GRACE_MS;
+    const later = 1_800_000_000_000;
     await markAllSeen("jp", later);
     await markAllSeen("jp", later - 1000);
     expect((await getSeen("jp"))._floor).toBe(later);
@@ -351,24 +340,18 @@ After `getEngagement` (before the `/* ---… avatar */` divider) add:
 /* ------------------------------------------------------------- read state */
 
 /**
- * Nothing before this is unread for anyone: a week before read state moved to
- * the server. A fixed date, not "a week before your first visit", so being
- * away for a while can never turn a comment into "read".
+ * How far `userId` has read each thread, plus their floor. There is no starting
+ * cutoff: a comment is unread until its thread is opened, however old it is
+ * and however late you joined. Only Mark all read raises the floor.
  */
-export const SHIP_FLOOR = Date.UTC(2026, 8, 18);
-
-/** Someone who joins later starts this far back, not at SHIP_FLOOR. */
-export const JOIN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** How far `userId` has read each thread, plus the floor that applies to them. */
-export async function getSeen(userId: string, joinedAt?: number): Promise<SeenMap> {
+export async function getSeen(userId: string): Promise<SeenMap> {
   const raw = (await redis.hgetall<Record<string, unknown>>(seenKey(userId))) ?? {};
   const out: SeenMap = {};
   for (const [k, v] of Object.entries(raw)) {
     const n = Number(v);
     if (Number.isFinite(n)) out[k] = n;
   }
-  out[FLOOR] = Math.max(SHIP_FLOOR, joinedAt ? joinedAt - JOIN_GRACE_MS : 0, out[FLOOR] ?? 0);
+  out[FLOOR] = out[FLOOR] ?? 0;
   return out;
 }
 
@@ -394,7 +377,7 @@ export async function markAllSeen(userId: string, at: number): Promise<void> {
 - [ ] **Step 5: Run the suite**
 
 Run: `npm test`
-Expected: PASS (all prior tests plus 8 new ones).
+Expected: PASS (all prior tests plus 6 new ones).
 
 - [ ] **Step 6: Commit**
 
@@ -507,7 +490,7 @@ In `web/app/api/__tests__/crew.test.ts`, add a hoisted spy and a mock entry. Put
 
 ```ts
 const { getSeen } = vi.hoisted(() => ({
-  getSeen: vi.fn(async (_id: string, _joinedAt?: number) => ({ _floor: 42, "peter:1": 7 })),
+  getSeen: vi.fn(async (_id: string) => ({ _floor: 42, "peter:1": 7 })),
 }));
 ```
 
@@ -520,10 +503,10 @@ and inside the `vi.mock("@/lib/store", …)` factory:
 and inside the `describe`:
 
 ```ts
-  it("includes what the viewer has read, floored from when they joined", async () => {
+  it("includes what the viewer has read", async () => {
     const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
     expect((await res.json()).seen).toEqual({ _floor: 42, "peter:1": 7 });
-    expect(getSeen).toHaveBeenCalledWith("jp", person.profile.joinedAt);
+    expect(getSeen).toHaveBeenCalledWith("jp");
   });
 ```
 
@@ -589,8 +572,7 @@ export async function POST(req: Request) {
 
 ```ts
   const engagement = await getEngagement(feed.map((f) => f.id));
-  const joinedAt = people.find((p) => p.profile.id === viewer)?.profile.joinedAt;
-  const seen = await getSeen(viewer, joinedAt);
+  const seen = await getSeen(viewer);
 
   const body: CrewResponse = { viewer, people, feed, engagement, seen };
 ```

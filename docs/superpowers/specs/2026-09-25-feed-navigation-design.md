@@ -43,18 +43,13 @@ unread(comment, item, viewer, seen) =
   && comment.at > max(seen[item.id] ?? 0, seen._floor)
 ```
 
-**Floor (computed, not a one-time stamp):** the `_floor` returned to the
-client is
-
-```
-max( SHIP_FLOOR,                    // 2026-09-18T00:00Z, a week before this shipped
-     profile.joinedAt − 7 days,     // someone who joins later skips old threads
-     stored _floor )                // "Mark all read" (§4a)
-```
-
-It depends on fixed dates, never on when you happen to visit, so being away
-for any length of time can't turn a comment into "read". Adam's 行う comment
-(25 Sep) is unread for JP. A viewer with no profile yet uses `SHIP_FLOOR`.
+**Floor:** `_floor` is 0 until you use Mark all read (§4a), then the time you
+marked up to. There is no starting cutoff: every comment by someone else is
+unread until you open its thread, however old it is and however late you
+joined. The crew comments rarely, so a late joiner should see all of it, and
+Mark all read is there if it's ever too much. Side effect at ship: JP's 軽快
+thread shows as unread once even though JP already replied, because read
+state starts empty.
 
 **Times come from what you were shown, not the server clock.** Every "mark
 read" sends `upTo` = the newest comment time the client had on screen for
@@ -162,11 +157,10 @@ Shortcuts sheet gains `n` (next unread) and `g` (top).
 ## 8. Testing
 
 - `lib/unread.ts` — unit: others-only, per-item seen, floor, missing seen.
-- `store` — computed floor (ship date / joinedAt / stored); thread and floor
-  times never move backwards.
+- `store` — floor is 0 until Mark all read; thread and floor times never
+  move backwards.
 - `/api/seen` — one thread, all, `upTo` clamped to now, every 400/401 case.
-- `/api/crew` — includes `seen` with the floor computed from the viewer's
-  `joinedAt`.
+- `/api/crew` — includes the viewer's `seen`.
 - Mark all read — two taps, timeout reset, sends the newest shown time.
 - `Feed` — outcome/comments/unread filters combine; sticky unread; empty
   state; day headers in given tz; 30 + "Show more"; jump into unrendered
