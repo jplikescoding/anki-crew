@@ -10,3 +10,7 @@ next-env.d.ts
 *.tsbuildinfo
 publisher/state.json
 publisher/publish.log
+
+# Written by `next dev` on every start; not ours.
+web/AGENTS.md
+web/CLAUDE.md
