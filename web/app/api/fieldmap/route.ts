@@ -21,8 +21,9 @@ export async function POST(req: Request) {
   }
 
   // Only your own note types, and only their real field names.
-  const fields = (await getNoteTypes(user))[b.noteType];
-  if (!fields) return NextResponse.json({ error: "bad request" }, { status: 400 });
+  const types = await getNoteTypes(user);
+  if (!Object.hasOwn(types, b.noteType)) return NextResponse.json({ error: "bad request" }, { status: 400 });
+  const fields = types[b.noteType];
   const map: FieldMap = {};
   for (const [role, name] of Object.entries(b.map as Record<string, unknown>)) {
     if (!ROLES.includes(role as FieldRole) || typeof name !== "string" || !fields.includes(name)) {

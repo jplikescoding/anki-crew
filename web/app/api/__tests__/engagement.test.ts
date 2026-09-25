@@ -231,4 +231,8 @@ describe("POST /api/fieldmap", () => {
     // Peter's key has no note type T, so it can't borrow JP's.
     expect((await fieldmap(req({ noteType: "T", map: { word: "Expression" } }, "key_p"))).status).toBe(400);
   });
+
+  it("rejects a note type name that isn't really yours instead of throwing on a prototype key", async () => {
+    expect((await fieldmap(req({ noteType: "constructor", map: { word: "Expression" } }))).status).toBe(400);
+  });
 });
