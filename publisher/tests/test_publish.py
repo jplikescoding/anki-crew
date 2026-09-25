@@ -110,5 +110,76 @@ class TestLoadConfig(unittest.TestCase):
         self.assertIn("endpoint", str(ctx.exception))
 
 
+class TestWordsHashSkip(unittest.TestCase):
+    def test_drops_the_index_when_the_server_already_has_it(self):
+        payload = {"user": "jp", "words": {"known": ["話す"], "learning": [], "new": []}}
+        _, h = P.without_unchanged_words(payload, None)
+        sent, h2 = P.without_unchanged_words(payload, h)
+        self.assertNotIn("words", sent)
+        self.assertEqual(h, h2)
+        self.assertIn("words", payload)  # the original is left alone
+
+    def test_sends_the_index_when_it_changed(self):
+        payload = {"user": "jp", "words": {"known": ["話す"], "learning": [], "new": []}}
+        sent, _ = P.without_unchanged_words(payload, "stale")
+        self.assertIn("words", sent)
+
+
+class TestMainState(unittest.TestCase):
+    def _setup(self):
+        tmp = tempfile.mkdtemp()
+        src = os.path.join(tmp, "collection.anki2")
+        con = build_db(src)
+        set_config(con, "rollover", 4)
+        add_deck(con, 5, "Core")
+        add_notetype(con, 1, "Japanese Vocab Dynamic", ["Expression", "Meaning"])
+        add_note(con, 100, 1, ["話す", "to speak"])
+        add_card(con, 200, 100, 5, ivl=21)
+        add_review(con, ms(datetime(2026, 9, 21, 10, 0)), 200)
+        con.close()
+        cfg = os.path.join(tmp, "config.json")
+        with open(cfg, "w", encoding="utf-8") as fh:
+            json.dump({"user": "jp", "displayName": "JP", "endpoint": "https://x.test",
+                       "token": "t", "collection": src}, fh)
+        return cfg, os.path.join(tmp, "state.json")
+
+    def test_second_publish_leaves_out_an_unchanged_index(self):
+        cfg, state = self._setup()
+        sent = []
+        with mock.patch.object(P, "STATE_FILE", state), \
+             mock.patch.object(P, "post_payload", lambda e, t, p: sent.append(p) or {}), \
+             mock.patch.object(P.sys, "stdout", io.StringIO()):
+            self.assertEqual(P.main(["--config", cfg]), 0)
+            self.assertEqual(P.main(["--config", cfg]), 0)
+        self.assertIn("words", sent[0])
+        self.assertNotIn("words", sent[1])
+        self.assertIn("wordsHash", P.read_state(state))
+
+    def test_a_failed_send_does_not_record_the_hash(self):
+        cfg, state = self._setup()
+
+        def fail(*_a):
+            raise OSError("offline")
+
+        with mock.patch.object(P, "STATE_FILE", state), \
+             mock.patch.object(P, "post_payload", fail), \
+             mock.patch.object(P.sys, "stderr", io.StringIO()):
+            self.assertEqual(P.main(["--config", cfg]), 4)
+        self.assertNotIn("wordsHash", P.read_state(state))
+
+    def test_dry_run_prints_sizes_and_note_types_without_posting(self):
+        cfg, state = self._setup()
+        out = io.StringIO()
+        with mock.patch.object(P, "STATE_FILE", state), \
+             mock.patch.object(P, "post_payload", mock.Mock(side_effect=AssertionError)), \
+             mock.patch.object(P.sys, "stdout", out):
+            self.assertEqual(P.main(["--config", cfg, "--dry-run"]), 0)
+        text = out.getvalue()
+        self.assertIn("Japanese Vocab Dynamic: Expression, Meaning", text)
+        self.assertIn("words: 1 known, 0 learning, 0 new", text)
+        self.assertIn("payload:", text)
+        self.assertEqual(P.read_state(state), {})
+
+
 if __name__ == "__main__":
     unittest.main()

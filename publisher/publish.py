@@ -1,8 +1,10 @@
 """Reads this machine's Anki collection and publishes it to the crew dashboard.
 
-Every run sends the entire history. There is no incremental window and no local
-state file, so the publisher and the server cannot drift out of sync, and a
-machine that was switched off for a week heals itself on the next run.
+Every run sends the entire history. The word index is the bulk of a publish and
+rarely changes, so the server remembers which version it has. state.json records
+which word index is already on the server and when to publish. The publisher and
+the server cannot drift out of sync, and a machine that was switched off for a
+week heals itself on the next run.
 """
 import argparse
 import json
@@ -135,6 +137,28 @@ def post_payload(endpoint, token, payload):
     return json.loads(body) if body else {}
 
 
+def without_unchanged_words(payload, last_hash):
+    """The payload to send, and the index's hash. The word index is the bulk of
+    a publish and rarely changes, so it's left out when the server already has it."""
+    h = words_mod.words_hash(payload["words"])
+    if h == last_hash:
+        payload = {k: v for k, v in payload.items() if k != "words"}
+    return payload, h
+
+
+def summary(payload):
+    """What --dry-run prints: sizes and field names, not the whole payload."""
+    w = payload["words"]
+    lines = ["payload: %d KB, %d feed cards" % (
+        len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) // 1024,
+        len(payload["recentCards"]))]
+    lines.append("words: %d known, %d learning, %d new"
+                 % (len(w["known"]), len(w["learning"]), len(w["new"])))
+    for name, fields in payload["noteTypes"].items():
+        lines.append("%s: %s" % (name, ", ".join(fields)))
+    return "\n".join(lines)
+
+
 def resolve_collection(cfg):
     path = cfg.get("collection")
     if path:
@@ -163,14 +187,13 @@ def main(argv=None):
         return 2
 
     mtime = None
-    state = {}
+    state = read_state(STATE_FILE)
     if args.on_change:
         try:
             mtime = collection_mtime(src)
         except OSError as exc:
             print("cannot read collection at %s: %s" % (src, exc), file=sys.stderr)
             return EXIT_UNREADABLE_COLLECTION
-        state = read_state()
         now = time.time()
         if backing_off(state, now) or not should_publish(
                 mtime, state.get("lastMtime"), state.get("lastPublishAt"), now):
@@ -195,11 +218,13 @@ def main(argv=None):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     if args.dry_run:
-        print(json.dumps(payload, ensure_ascii=False, indent=2)[:4000])
+        print(summary(payload))
         return 0
 
+    sent, words_hash = without_unchanged_words(payload, state.get("wordsHash"))
+
     try:
-        post_payload(cfg["endpoint"], cfg["token"], payload)
+        post_payload(cfg["endpoint"], cfg["token"], sent)
     except OSError as exc:  # URLError, HTTPError and read timeouts are all OSErrors
         if isinstance(exc, urllib.error.HTTPError):
             print("publish failed: HTTP %s %s" % (exc.code, exc.reason), file=sys.stderr)
@@ -212,8 +237,11 @@ def main(argv=None):
             write_state(STATE_FILE, dict(state, lastFailAt=time.time()))
         return 4
 
+    new_state = {k: v for k, v in state.items() if k != "lastFailAt"}
+    new_state["wordsHash"] = words_hash
     if args.on_change and mtime is not None:
-        write_state(STATE_FILE, {"lastMtime": mtime, "lastPublishAt": time.time()})
+        new_state.update(lastMtime=mtime, lastPublishAt=time.time())
+    write_state(STATE_FILE, new_state)
 
     today = today_key(rollover)
     todays = next((d for d in payload["days"] if d["date"] == today), None)
