@@ -17,19 +17,20 @@
 - Colours only from the "Aurora Glass" tokens in `web/app/globals.css`: rose = miss, jade = got it / caught up, cyan = new/unread. Anything else is grey (`--ink-*`).
 - Motion 150–220 ms for interactions; the global `prefers-reduced-motion` rule in `globals.css` already neutralises CSS animation; JS scrolling must use `scrollBehavior()` (Task 8).
 - Touch targets on the filter bar ≥ 32 px (`min-h-8`).
-- Rollout floor = now − 7 days, set once per user with HSETNX.
-- `itemId` accepted by APIs: non-empty string, ≤ 128 chars.
+- Floor = `max(SHIP_FLOOR = Date.UTC(2026, 8, 18), joinedAt − 7 days, stored _floor)`, computed on every read.
+- Every "mark read" carries `upTo` (newest comment time the client showed); the server stores `min(upTo, now)`, and stored read times only ever increase.
+- `itemId` accepted by APIs: non-empty string, ≤ 128 chars, not `"_floor"`.
 - Page size = 30.
 - Comments keep the existing voice: short, explain *why*, no restating code.
 - Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
 
-1. **A failed "mark read" save must not loop.** If `/api/seen` fails, the page reloads; stale server state must not make the Feed POST again and reload again forever. → `asked` guard test in Task 6, `mergeSeen` test in Task 1 and page test in Task 9.
-2. **A refresh landing just after you open a thread must not un-read it.** The server's copy may predate the POST. → `mergeSeen` keeps the max per key (Task 1), page test (Task 9).
-3. **Posting `itemId: "_floor"` to `/api/seen` must be rejected** — it would silently mark every comment read. → Task 3 test.
-4. **A profile with an unknown/garbage `tz` must not crash the feed.** `Intl.DateTimeFormat` throws `RangeError`. → fallback to UTC, Task 4 test.
-5. **Tapping the badge while a person/outcome filter hides the unread card must still land on it.** → jump resets other filters, Task 8 test.
+1. **A comment posted after your last refresh must not be marked read by a tap on a thread you haven't reloaded.** → `upTo` from the client, clamped server-side (Task 3 tests), Feed sends the newest shown time (Task 6 test).
+2. **A second device with stale data must not un-read what you read elsewhere,** and a refresh landing just after you open a thread must not un-read it. → store never lowers a time (Task 2 tests), `mergeSeen` (Task 1), page refresh test (Task 9).
+3. **A failed "mark read" save must not loop.** If `/api/seen` fails, the page reloads; stale server state must not make the Feed POST again and reload again forever. → `asked` guard test (Task 6).
+4. **Posting `itemId: "_floor"` to `/api/seen` must be rejected**, which would otherwise mark every comment read. The same goes for a body with both `all` and `itemId`. → Task 3 tests.
+5. **A profile with an unknown/garbage `tz` must not crash the feed** (`Intl.DateTimeFormat` throws `RangeError`) → UTC fallback, Task 4 test. **Tapping the badge while a filter hides the unread card must still land on it** → Task 8 test.
 
 ---
 
@@ -49,6 +50,7 @@
   - `unreadCount(engagement: Record<string, Engagement>, viewer: string | null, seen: SeenMap): number`
   - `unreadThreads(engagement: Record<string, Engagement>, viewer: string | null, seen: SeenMap): string[]` — item ids, newest unread comment first
   - `mergeSeen(a: SeenMap, b: SeenMap): SeenMap` — per-key max
+  - `newestIn(e: Engagement | undefined): number` — newest comment time on a card, 0 if none
 
 - [ ] **Step 1: Write the failing test**
 
@@ -56,7 +58,7 @@
 // web/lib/__tests__/unread.test.ts
 import { describe, it, expect } from "vitest";
 import {
-  FLOOR, isUnread, mergeSeen, readUpTo, unreadCount, unreadThreads,
+  FLOOR, isUnread, mergeSeen, newestIn, readUpTo, unreadCount, unreadThreads,
 } from "@/lib/unread";
 import type { Engagement } from "@/lib/types";
 
@@ -140,6 +142,17 @@ describe("mergeSeen", () => {
     expect(mergeSeen(local, server).a).toBe(9000);
   });
 });
+
+describe("newestIn", () => {
+  it("is the latest comment on the card, whoever wrote it", () => {
+    expect(newestIn(thread(c("peter", 200), c("jp", 900), c("adam", 300)))).toBe(900);
+  });
+
+  it("is zero for a card with no comments", () => {
+    expect(newestIn(undefined)).toBe(0);
+    expect(newestIn(thread())).toBe(0);
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -208,12 +221,21 @@ export function mergeSeen(a: SeenMap, b: SeenMap): SeenMap {
   for (const [k, v] of Object.entries(b)) out[k] = Math.max(out[k] ?? 0, v);
   return out;
 }
+
+/**
+ * The newest comment on a card. "Mark read" sends this rather than the clock,
+ * so a comment that arrived after your last refresh, one you never saw, stays
+ * unread.
+ */
+export function newestIn(e: Engagement | undefined): number {
+  return Math.max(0, ...(e?.comments ?? []).map((c) => c.at));
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/__tests__/unread.test.ts`
-Expected: PASS (12 tests).
+Expected: PASS (14 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -235,25 +257,23 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `FLOOR`, `SeenMap` from `@/lib/unread` (Task 1).
 - Produces:
-  - `SEEN_FLOOR_MS = 7 * 24 * 60 * 60 * 1000`
-  - `getSeen(userId: string, now?: number): Promise<SeenMap>` — sets `_floor` once, returns numbers
-  - `markSeen(userId: string, itemId: string, at: number): Promise<void>`
+  - `SHIP_FLOOR = Date.UTC(2026, 8, 18)`
+  - `JOIN_GRACE_MS = 7 * 24 * 60 * 60 * 1000`
+  - `getSeen(userId: string, joinedAt?: number): Promise<SeenMap>`. The result always includes `_floor = max(SHIP_FLOOR, joinedAt − JOIN_GRACE_MS, stored _floor)`.
+  - `markSeen(userId: string, itemId: string, at: number): Promise<void>`. Never lowers a stored time.
+  - `markAllSeen(userId: string, at: number): Promise<void>`. Raises the stored `_floor` and never lowers it.
 
-- [ ] **Step 1: Add `hsetnx` to the in-memory Redis mock**
+- [ ] **Step 1: Add `hget` to the in-memory Redis mock**
 
 In `web/lib/__tests__/store.test.ts`, inside the mocked `Redis` class, directly after the `hgetall` method, add:
 
 ```ts
-    async hsetnx(key: string, field: string, value: unknown) {
-      const h = state.hashes.get(key) ?? new Map();
-      if (h.has(field)) return 0;
-      h.set(field, value as string);
-      state.hashes.set(key, h);
-      return 1;
+    async hget(key: string, field: string) {
+      return state.hashes.get(key)?.get(field) ?? null;
     }
 ```
 
-Add `getSeen, markSeen, SEEN_FLOOR_MS` to the existing `import { … } from "@/lib/store";` list.
+Add `getSeen, markSeen, markAllSeen, SHIP_FLOOR, JOIN_GRACE_MS` to the existing `import { … } from "@/lib/store";` list.
 
 - [ ] **Step 2: Write the failing tests** (append to the end of the file)
 
@@ -261,20 +281,28 @@ Add `getSeen, markSeen, SEEN_FLOOR_MS` to the existing `import { … } from "@/l
 describe("read state", () => {
   beforeEach(() => { state.hashes.clear(); });
 
-  it("starts someone new a week back, so recent comments still show as unread", async () => {
-    const seen = await getSeen("jp", 1_000_000_000_000);
-    expect(seen._floor).toBe(1_000_000_000_000 - SEEN_FLOOR_MS);
+  it("starts everyone at a fixed line, however long they've been away", async () => {
+    expect((await getSeen("jp"))._floor).toBe(SHIP_FLOOR);
   });
 
-  it("sets the floor once and never moves it", async () => {
-    await getSeen("jp", 1_000_000_000_000);
-    const later = await getSeen("jp", 2_000_000_000_000);
-    expect(later._floor).toBe(1_000_000_000_000 - SEEN_FLOOR_MS);
+  it("starts someone who joined later a week before they joined", async () => {
+    const joinedAt = SHIP_FLOOR + 60 * JOIN_GRACE_MS;
+    expect((await getSeen("peter", joinedAt))._floor).toBe(joinedAt - JOIN_GRACE_MS);
   });
 
-  it("remembers when each thread was opened", async () => {
+  it("keeps the fixed line for someone who joined before it", async () => {
+    expect((await getSeen("jp", SHIP_FLOOR - JOIN_GRACE_MS))._floor).toBe(SHIP_FLOOR);
+  });
+
+  it("remembers how far each thread was read", async () => {
+    await markSeen("jp", "peter:1", SHIP_FLOOR + 5000);
+    expect((await getSeen("jp"))["peter:1"]).toBe(SHIP_FLOOR + 5000);
+  });
+
+  it("never moves a thread backwards, so a stale device can't un-read it", async () => {
+    await markSeen("jp", "peter:1", 9000);
     await markSeen("jp", "peter:1", 5000);
-    expect((await getSeen("jp"))["peter:1"]).toBe(5000);
+    expect((await getSeen("jp"))["peter:1"]).toBe(9000);
   });
 
   it("keeps each person's read state to themselves", async () => {
@@ -282,9 +310,16 @@ describe("read state", () => {
     expect((await getSeen("adam"))["peter:1"]).toBeUndefined();
   });
 
+  it("raises the floor when everything is marked read, and never lowers it", async () => {
+    const later = SHIP_FLOOR + 10 * JOIN_GRACE_MS;
+    await markAllSeen("jp", later);
+    await markAllSeen("jp", later - 1000);
+    expect((await getSeen("jp"))._floor).toBe(later);
+  });
+
   it("reads times that Redis hands back as strings", async () => {
-    state.hashes.set("seen:jp", new Map([["_floor", "10"], ["peter:1", "123"]]));
-    expect(await getSeen("jp")).toEqual({ _floor: 10, "peter:1": 123 });
+    state.hashes.set("seen:jp", new Map([["peter:1", "123"]]));
+    expect((await getSeen("jp"))["peter:1"]).toBe(123);
   });
 });
 ```
@@ -292,7 +327,7 @@ describe("read state", () => {
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `npx vitest run lib/__tests__/store.test.ts`
-Expected: FAIL — `getSeen` is not exported.
+Expected: FAIL, because `getSeen` is not exported.
 
 - [ ] **Step 4: Implement**
 
@@ -315,34 +350,51 @@ After `getEngagement` (before the `/* ---… avatar */` divider) add:
 ```ts
 /* ------------------------------------------------------------- read state */
 
-/** How much backlog counts as unread the first time someone's state is made. */
-export const SEEN_FLOOR_MS = 7 * 24 * 60 * 60 * 1000;
-
 /**
- * When `userId` last opened each thread. The first call ever lays down a floor
- * a week back: older comments start read, anything newer waits to be opened.
- * HSETNX so two tabs loading at once agree on one floor.
+ * Nothing before this is unread for anyone: a week before read state moved to
+ * the server. A fixed date, not "a week before your first visit", so being
+ * away for a while can never turn a comment into "read".
  */
-export async function getSeen(userId: string, now = Date.now()): Promise<SeenMap> {
-  await redis.hsetnx(seenKey(userId), FLOOR, now - SEEN_FLOOR_MS);
+export const SHIP_FLOOR = Date.UTC(2026, 8, 18);
+
+/** Someone who joins later starts this far back, not at SHIP_FLOOR. */
+export const JOIN_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** How far `userId` has read each thread, plus the floor that applies to them. */
+export async function getSeen(userId: string, joinedAt?: number): Promise<SeenMap> {
   const raw = (await redis.hgetall<Record<string, unknown>>(seenKey(userId))) ?? {};
   const out: SeenMap = {};
   for (const [k, v] of Object.entries(raw)) {
     const n = Number(v);
     if (Number.isFinite(n)) out[k] = n;
   }
+  out[FLOOR] = Math.max(SHIP_FLOOR, joinedAt ? joinedAt - JOIN_GRACE_MS : 0, out[FLOOR] ?? 0);
   return out;
 }
 
+/**
+ * Read times only go forward. A phone that loaded an hour ago must not undo
+ * what the laptop just read. Read-then-write can race, but only between two of
+ * your own devices inside one request, and whichever wins is still a read.
+ */
+async function raise(userId: string, field: string, at: number): Promise<void> {
+  const cur = Number((await redis.hget(seenKey(userId), field)) ?? 0);
+  if (at > cur) await redis.hset(seenKey(userId), { [field]: at });
+}
+
 export async function markSeen(userId: string, itemId: string, at: number): Promise<void> {
-  await redis.hset(seenKey(userId), { [itemId]: at });
+  await raise(userId, itemId, at);
+}
+
+export async function markAllSeen(userId: string, at: number): Promise<void> {
+  await raise(userId, FLOOR, at);
 }
 ```
 
 - [ ] **Step 5: Run the suite**
 
 Run: `npm test`
-Expected: PASS (all prior tests + 5 new).
+Expected: PASS (all prior tests plus 8 new ones).
 
 - [ ] **Step 6: Commit**
 
@@ -355,33 +407,36 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: APIs — `/api/seen`, comment marks read, crew returns `seen`
+### Task 3: APIs (`/api/seen`, crew returns `seen`)
 
 **Files:**
 - Create: `web/app/api/seen/route.ts`
-- Modify: `web/app/api/comment/route.ts`, `web/app/api/crew/route.ts`, `web/lib/types.ts:68-72`
+- Modify: `web/app/api/crew/route.ts`, `web/lib/types.ts:68-72`
 - Modify (fixture only): `web/app/__tests__/page.test.tsx` `crew()` helper
 - Test: `web/app/api/__tests__/engagement.test.ts`, `web/app/api/__tests__/crew.test.ts`
 
+`/api/comment` is **not** changed. You can only reply with the thread open, and the Feed already marks an open thread read with the right `upTo`.
+
 **Interfaces:**
-- Consumes: `getSeen`, `markSeen` (Task 2); `FLOOR` (Task 1).
+- Consumes: `getSeen`, `markSeen`, `markAllSeen` (Task 2); `FLOOR` (Task 1).
 - Produces:
-  - `POST /api/seen?key=…` body `{ itemId }` → `200 { ok: true, at }` | 400 | 401
+  - `POST /api/seen?key=…` with body `{ itemId, upTo }` or `{ all: true, upTo }` → `200 { ok: true, at }` where `at = min(upTo, now)`; otherwise 400 or 401
   - `CrewResponse.seen: Record<string, number>`
-  - `/api/comment` now also calls `markSeen(user, itemId, comment.at)`
 
 - [ ] **Step 1: Write the failing tests**
 
 In `web/app/api/__tests__/engagement.test.ts`:
 
-Add a mock fn next to the others and to the `vi.mock` factory:
+Add mock fns next to the others, and add them to the `vi.mock` factory:
 
 ```ts
 const markSeen = vi.fn<AnyFn>();
+const markAllSeen = vi.fn<AnyFn>();
 ```
 
 ```ts
   markSeen: (...a: unknown[]) => markSeen(...a),
+  markAllSeen: (...a: unknown[]) => markAllSeen(...a),
 ```
 
 Import the new route next to the others:
@@ -390,74 +445,99 @@ Import the new route next to the others:
 import { POST as seen } from "@/app/api/seen/route";
 ```
 
-Add `markSeen.mockClear();` to the `beforeEach`.
-
-Inside `describe("POST /api/comment", …)` add:
-
-```ts
-  it("marks the thread read for whoever posted, so their reply doesn't leave it unread", async () => {
-    const res = await comment(req({ itemId: "peter:1", text: "same" }));
-    const { comment: stored } = await res.json();
-    expect(markSeen).toHaveBeenCalledWith("jp", "peter:1", stored.at);
-  });
-```
+Add `markSeen.mockClear(); markAllSeen.mockClear();` to the `beforeEach`.
 
 Append:
 
 ```ts
 describe("POST /api/seen", () => {
-  it("records that the key holder opened the thread", async () => {
-    const before = Date.now();
-    const res = await seen(req({ itemId: "peter:1" }));
+  it("records how far the key holder has read a thread", async () => {
+    const res = await seen(req({ itemId: "peter:1", upTo: 5000 }));
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, at: 5000 });
+    expect(markSeen).toHaveBeenCalledWith("jp", "peter:1", 5000);
+  });
+
+  it("never records a time in the future", async () => {
+    const res = await seen(req({ itemId: "peter:1", upTo: Date.now() + 3_600_000 }));
     const { at } = await res.json();
-    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(Date.now());
     expect(markSeen).toHaveBeenCalledWith("jp", "peter:1", at);
   });
 
-  it("rejects a missing or oversized itemId", async () => {
-    expect((await seen(req({}))).status).toBe(400);
-    expect((await seen(req({ itemId: "x".repeat(129) }))).status).toBe(400);
+  it("marks everything read up to a time", async () => {
+    const res = await seen(req({ all: true, upTo: 7000 }));
+    expect(res.status).toBe(200);
+    expect(markAllSeen).toHaveBeenCalledWith("jp", 7000);
     expect(markSeen).not.toHaveBeenCalled();
   });
 
-  it("refuses to move the floor, which would mark every comment read", async () => {
-    expect((await seen(req({ itemId: "_floor" }))).status).toBe(400);
+  it("rejects a missing, non-numeric or non-positive upTo", async () => {
+    // Infinity serialises to null in JSON, so it arrives as a non-number.
+    for (const upTo of [undefined, "5000", 0, -1, Infinity]) {
+      expect((await seen(req({ itemId: "peter:1", upTo }))).status).toBe(400);
+    }
+    expect(markSeen).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing or oversized itemId", async () => {
+    expect((await seen(req({ upTo: 5000 }))).status).toBe(400);
+    expect((await seen(req({ itemId: "x".repeat(129), upTo: 5000 }))).status).toBe(400);
+    expect(markSeen).not.toHaveBeenCalled();
+  });
+
+  it("refuses to treat the floor as a thread", async () => {
+    expect((await seen(req({ itemId: "_floor", upTo: 5000 }))).status).toBe(400);
+    expect(markSeen).not.toHaveBeenCalled();
+  });
+
+  it("rejects a body that asks for one thread and everything at once", async () => {
+    expect((await seen(req({ all: true, itemId: "peter:1", upTo: 5000 }))).status).toBe(400);
+    expect(markAllSeen).not.toHaveBeenCalled();
     expect(markSeen).not.toHaveBeenCalled();
   });
 
   it("rejects a missing key", async () => {
-    expect((await seen(req({ itemId: "peter:1" }, ""))).status).toBe(401);
+    expect((await seen(req({ itemId: "peter:1", upTo: 5000 }, ""))).status).toBe(401);
   });
 });
 ```
 
-In `web/app/api/__tests__/crew.test.ts`, add to the `vi.mock` factory:
+In `web/app/api/__tests__/crew.test.ts`, add a hoisted spy and a mock entry. Put this above the `vi.mock` call:
 
 ```ts
-  getSeen: async (id: string) => (id === "jp" ? { _floor: 42, "peter:1": 7 } : {}),
+const { getSeen } = vi.hoisted(() => ({
+  getSeen: vi.fn(async (_id: string, _joinedAt?: number) => ({ _floor: 42, "peter:1": 7 })),
+}));
+```
+
+and inside the `vi.mock("@/lib/store", …)` factory:
+
+```ts
+  getSeen,
 ```
 
 and inside the `describe`:
 
 ```ts
-  it("includes what the viewer has read", async () => {
+  it("includes what the viewer has read, floored from when they joined", async () => {
     const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
     expect((await res.json()).seen).toEqual({ _floor: 42, "peter:1": 7 });
+    expect(getSeen).toHaveBeenCalledWith("jp", person.profile.joinedAt);
   });
 ```
 
 - [ ] **Step 2: Run to verify failure**
 
 Run: `npx vitest run app/api/__tests__`
-Expected: FAIL — `@/app/api/seen/route` missing; crew `seen` undefined; comment test: `markSeen` not called.
+Expected: FAIL, because `@/app/api/seen/route` is missing and crew's `seen` is undefined.
 
 - [ ] **Step 3: Implement**
 
-`web/lib/types.ts` — add to `CrewResponse`:
+`web/lib/types.ts`: add to `CrewResponse`:
 
 ```ts
-  /** When the viewer last opened each thread, plus "_floor". See lib/unread. */
+  /** How far the viewer has read each thread, plus "_floor". See lib/unread. */
   seen: Record<string, number>;
 ```
 
@@ -466,8 +546,10 @@ Expected: FAIL — `@/app/api/seen/route` missing; crew `seen` undefined; commen
 ```ts
 import { NextResponse } from "next/server";
 import { userForRequest } from "@/lib/identity";
-import { markSeen } from "@/lib/store";
+import { markAllSeen, markSeen } from "@/lib/store";
 import { FLOOR } from "@/lib/unread";
+
+const bad = () => NextResponse.json({ error: "bad request" }, { status: 400 });
 
 export async function POST(req: Request) {
   const user = userForRequest(req);
@@ -477,40 +559,43 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "bad request" }, { status: 400 });
+    return bad();
   }
 
-  const b = body as { itemId?: unknown };
-  // The floor shares the hash with thread ids; letting a client write it would
-  // mark every comment read in one request.
-  if (typeof b?.itemId !== "string" || b.itemId.length === 0 || b.itemId.length > 128
+  const b = body as { itemId?: unknown; all?: unknown; upTo?: unknown };
+  // upTo is the newest comment the page had shown, not the server clock, so a
+  // comment posted after your last refresh stays unread until you see it.
+  if (typeof b?.upTo !== "number" || !Number.isFinite(b.upTo) || b.upTo <= 0) return bad();
+  const at = Math.min(b.upTo, Date.now());
+
+  if (b.all === true) {
+    if (b.itemId !== undefined) return bad();
+    await markAllSeen(user, at);
+    return NextResponse.json({ ok: true, at });
+  }
+
+  // The floor shares the hash with thread ids. Only the explicit "all" path
+  // may move it.
+  if (typeof b.itemId !== "string" || b.itemId.length === 0 || b.itemId.length > 128
       || b.itemId === FLOOR) {
-    return NextResponse.json({ error: "bad request" }, { status: 400 });
+    return bad();
   }
-
-  const at = Date.now();
   await markSeen(user, b.itemId, at);
   return NextResponse.json({ ok: true, at });
 }
 ```
 
-`web/app/api/comment/route.ts` — import `markSeen` alongside `addComment`, and after `await addComment(b.itemId, comment);` add:
-
-```ts
-  // Replying means you've read the thread, including anything above your reply.
-  await markSeen(user, b.itemId, comment.at);
-```
-
-`web/app/api/crew/route.ts` — import `getSeen`, and replace the body construction:
+`web/app/api/crew/route.ts`: import `getSeen`, and replace the body construction:
 
 ```ts
   const engagement = await getEngagement(feed.map((f) => f.id));
-  const seen = await getSeen(viewer);
+  const joinedAt = people.find((p) => p.profile.id === viewer)?.profile.joinedAt;
+  const seen = await getSeen(viewer, joinedAt);
 
   const body: CrewResponse = { viewer, people, feed, engagement, seen };
 ```
 
-`web/app/__tests__/page.test.tsx` — the `crew()` helper's return object gains `seen: {},` (after `engagement,`) so the file still type-checks. Behaviour tests come in Task 9.
+`web/app/__tests__/page.test.tsx`: add `seen: {},` after `engagement,` in the `crew()` helper's return object so the file still type-checks. Behaviour tests come in Task 9.
 
 - [ ] **Step 4: Run the suite**
 
@@ -521,7 +606,7 @@ Expected: PASS.
 
 ```bash
 git add web/app/api web/lib/types.ts web/app/__tests__/page.test.tsx
-git commit -m "Save when a thread is opened, and send read state with the crew
+git commit -m "Save how far each thread was read, and send it with the crew
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -931,7 +1016,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `isUnread`, `readUpTo`, `unreadThreads`, `SeenMap` (Task 1); `FeedCard` (Task 5).
 - Produces — Feed props change:
   - removed: `unreadSince`
-  - added: `seen?: SeenMap`, `onSeen?: (itemId: string) => void`
+  - added: `seen?: SeenMap`, `onSeen?: (itemId: string, upTo: number) => void`, where `upTo` is the newest comment time on that card as shown
   - `jumpSignal` kept; now targets the thread with the newest unread comment.
 
 - [ ] **Step 1: Rewrite the unread tests**
@@ -968,7 +1053,8 @@ describe("reading a thread", () => {
     const onSeen = vi.fn();
     render(<Feed {...base} engagement={unread} seen={{ _floor: 1000 }} onSeen={onSeen} />);
     fireEvent.click(screen.getByTestId("thread-peter:1"));
-    expect(onSeen).toHaveBeenCalledWith("peter:1");
+    // The newest comment on screen, not the clock: anything newer is unseen.
+    expect(onSeen).toHaveBeenCalledWith("peter:1", 5000);
   });
 
   it("doesn't happen for a thread with nothing unread", () => {
@@ -996,6 +1082,7 @@ describe("reading a thread", () => {
     ] } };
     r.rerender(<Feed {...base} engagement={more} seen={{ _floor: 1000, "peter:1": 6000 }} onSeen={onSeen} />);
     expect(onSeen).toHaveBeenCalledTimes(2);
+    expect(onSeen).toHaveBeenLastCalledWith("peter:1", 7000);
   });
 
   it("keeps the new pills while you're reading, even after it's marked read", () => {
@@ -1021,16 +1108,16 @@ Expected: FAIL — `seen` isn't a Feed prop yet; "1 new" not shown; `onSeen` nev
 Imports:
 
 ```ts
-import { isUnread, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
+import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
 ```
 
 Props: remove `unreadSince` (and its doc line) from both the destructuring and the type; add:
 
 ```ts
-  /** When you last opened each thread, plus the floor. See lib/unread. */
+  /** How far you've read each thread, plus the floor. See lib/unread. */
   seen?: SeenMap;
-  /** Called when a thread with something unread in it is open. */
-  onSeen?: (itemId: string) => void;
+  /** A thread with something unread is open; upTo is its newest comment shown. */
+  onSeen?: (itemId: string, upTo: number) => void;
   /** Bumping this opens the thread with the newest unread comment. */
   jumpSignal?: number;
 ```
@@ -1081,10 +1168,10 @@ After the jump effect add:
     const fresh = (engagement[openThread]?.comments ?? [])
       .filter((c) => isUnread(c, openThread, me, seen));
     if (fresh.length === 0) return;
-    const newest = Math.max(...fresh.map((c) => c.at));
-    if (asked.current.get(openThread) === newest) return;
-    asked.current.set(openThread, newest);
-    onSeen(openThread);
+    const upTo = newestIn(engagement[openThread]);
+    if (asked.current.get(openThread) === upTo) return;
+    asked.current.set(openThread, upTo);
+    onSeen(openThread, upTo);
   }, [openThread, engagement, seen, me, onSeen]);
 ```
 
@@ -1369,7 +1456,7 @@ import FeedFilters from "@/app/components/FeedFilters";
 import {
   applyFilter, emptyMessage, groupByDay, isFiltered, NO_FILTER, type FeedFilter,
 } from "@/lib/feedView";
-import { isUnread, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
+import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
 import type { Engagement, FeedItem, PersonView } from "@/lib/types";
 
 export { EMOJI, ago } from "@/app/components/FeedCard";
@@ -1535,6 +1622,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `BackToTop.tsx`: `scrollBehavior(): ScrollBehavior`, `scrollToTop(): void`, default `BackToTop` (test id `back-to-top`)
   - `FeedCard` gains `arrived?: boolean` (adds `card-arrive` class)
   - test id `next-unread`; keys `n` (next unread), `g` (top)
+  - Feed prop `onMarkAllSeen?: (upTo: number) => void`; test id `mark-all-read`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1610,6 +1698,55 @@ describe("Next unread", () => {
   });
 });
 
+describe("Mark all read", () => {
+  const engagement: Record<string, Engagement> = { "adam:0": say(900), "adam:5": say(500) };
+
+  it("only shows with the Unread filter on and something unread", () => {
+    render(<Feed {...base} engagement={engagement} onMarkAllSeen={() => {}} />);
+    expect(screen.queryByTestId("mark-all-read")).toBeNull();
+    fireEvent.click(screen.getByTestId("filter-unread"));
+    expect(screen.getByTestId("mark-all-read")).toHaveTextContent("Mark all read");
+  });
+
+  it("takes a second tap, then marks read up to the newest comment shown", () => {
+    const onMarkAllSeen = vi.fn();
+    render(<Feed {...base} engagement={engagement} onMarkAllSeen={onMarkAllSeen} />);
+    fireEvent.click(screen.getByTestId("filter-unread"));
+    fireEvent.click(screen.getByTestId("mark-all-read"));
+    expect(onMarkAllSeen).not.toHaveBeenCalled();
+    expect(screen.getByTestId("mark-all-read")).toHaveTextContent("Tap again to mark 2 read");
+    fireEvent.click(screen.getByTestId("mark-all-read"));
+    expect(onMarkAllSeen).toHaveBeenCalledWith(900);
+  });
+
+  it("forgets the first tap after 3 seconds", () => {
+    vi.useFakeTimers();
+    try {
+      const onMarkAllSeen = vi.fn();
+      render(<Feed {...base} engagement={engagement} onMarkAllSeen={onMarkAllSeen} />);
+      fireEvent.click(screen.getByTestId("filter-unread"));
+      fireEvent.click(screen.getByTestId("mark-all-read"));
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(screen.getByTestId("mark-all-read")).toHaveTextContent("Mark all read");
+      fireEvent.click(screen.getByTestId("mark-all-read"));
+      expect(onMarkAllSeen).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the list down to the caught-up row", () => {
+    const r = render(<Feed {...base} engagement={engagement} onMarkAllSeen={() => {}} />);
+    fireEvent.click(screen.getByTestId("filter-unread"));
+    fireEvent.click(screen.getByTestId("mark-all-read"));
+    fireEvent.click(screen.getByTestId("mark-all-read"));
+    r.rerender(<Feed {...base} engagement={engagement} seen={{ _floor: 900 }} onMarkAllSeen={() => {}} />);
+    expect(screen.getByTestId("caught-up")).toBeTruthy();
+    expect(screen.queryByTestId("item-adam:0")).toBeNull();
+    expect(screen.queryByTestId("mark-all-read")).toBeNull();
+  });
+});
+
 describe("back to top", () => {
   it("appears once you've scrolled a screen down, and takes you up", () => {
     const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -1638,7 +1775,7 @@ describe("back to top", () => {
 - [ ] **Step 2: Run to verify failure**
 
 Run: `npx vitest run app/components/__tests__/FeedNavigation.test.tsx`
-Expected: FAIL — Unread not switched on by the jump; `next-unread` and `back-to-top` not found.
+Expected: FAIL: the jump doesn't switch Unread on, and `next-unread`, `mark-all-read` and `back-to-top` aren't found.
 
 - [ ] **Step 3: Create `BackToTop.tsx`**
 
@@ -1706,6 +1843,23 @@ Replace `const unreadRef = useRef<HTMLLIElement | null>(null);` with:
 After `changeFilter`, add:
 
 ```ts
+  // Mark all read takes two taps. The first only arms it, for 3 seconds.
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const t = window.setTimeout(() => setArming(false), 3000);
+    return () => window.clearTimeout(t);
+  }, [arming]);
+
+  const markAll = () => {
+    if (!arming) { setArming(true); return; }
+    setArming(false);
+    // Up to the newest comment on screen, so one that lands a second later still notifies.
+    onMarkAllSeen?.(Math.max(0, ...Object.values(engagement).map(newestIn)));
+    // Let go of the cards kept only because they had been unread.
+    setPinned(new Set());
+  };
+
   const goTo = (id: string) => {
     openThreadFor(id);
     setTarget(id);
@@ -1774,6 +1928,39 @@ On `<FeedCard>` replace the `cardRef` prop and add two props:
                     ) : undefined}
 ```
 
+Add the prop to Feed's destructuring and type:
+
+```ts
+  /** Mark every comment read up to this time. */
+  onMarkAllSeen?: (upTo: number) => void;
+```
+
+Directly after the `{caughtUp && (…)}` block, render:
+
+```tsx
+      {filter.unread && unread.length > 0 && onMarkAllSeen && (
+        <div
+          className="mx-3 mt-3 flex items-center justify-between gap-3 px-1.5 text-[11.5px]"
+          style={{ color: "var(--ink-faint)" }}
+        >
+          <span className="tabular-nums">
+            {unread.length} unread thread{unread.length === 1 ? "" : "s"}
+          </span>
+          <button
+            data-testid="mark-all-read"
+            onClick={markAll}
+            className="min-h-8 rounded-full px-3 transition-colors duration-150"
+            style={{
+              color: arming ? "#04121A" : "var(--cyan-soft)",
+              background: arming ? "var(--cyan)" : "transparent",
+            }}
+          >
+            {arming ? `Tap again to mark ${unread.length} read` : "Mark all read"}
+          </button>
+        </div>
+      )}
+```
+
 Render `<BackToTop />` as the last child of the outer `<div>`.
 
 In `FeedCard.tsx`, add the prop `arrived?: boolean` (doc: `/** Just navigated to; glows once. */`) and change the `<li>` class to:
@@ -1802,7 +1989,7 @@ Expected: PASS, including the existing `"jumping to the first unread comment …
 
 ```bash
 git add web/app/components web/app/globals.css
-git commit -m "Walk through unread threads, and get back to the top
+git commit -m "Walk through unread threads, mark them all read, and get back to the top
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1816,7 +2003,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Test: `web/app/__tests__/page.test.tsx`
 
 **Interfaces:**
-- Consumes: `mergeSeen`, `unreadCount`, `SeenMap` (Task 1); Feed props `seen`, `onSeen`, `jumpSignal` (Tasks 6/8); `POST /api/seen` (Task 3).
+- Consumes: `mergeSeen`, `unreadCount`, `SeenMap` (Task 1); Feed props `seen`, `onSeen(itemId, upTo)`, `onMarkAllSeen(upTo)`, `jumpSignal` (Tasks 6/8); `POST /api/seen` (Task 3).
 - Produces: final wiring; `Seen.commentsSeenAt` removed.
 
 - [ ] **Step 1: Rewrite the page tests**
@@ -1867,7 +2054,7 @@ describe("unread comments", () => {
     fireEvent.keyDown(window, { key: "2" });
     await act(async () => { fireEvent.click(screen.getByTestId("thread-peter:1")); });
     expect(screen.queryByTestId("unread-badge")).not.toBeInTheDocument();
-    expect(JSON.parse(seenCalls()[0][1].body)).toEqual({ itemId: "peter:1" });
+    expect(JSON.parse(seenCalls()[0][1].body)).toEqual({ itemId: "peter:1", upTo: 5000 });
   });
 
   it("open the Unread filter at the newest thread when you tap the badge", async () => {
@@ -1885,6 +2072,17 @@ describe("unread comments", () => {
     await act(async () => { fireEvent.click(screen.getByTestId("thread-peter:1")); });
     await refresh();
     expect(screen.queryByTestId("unread-badge")).not.toBeInTheDocument();
+  });
+
+  it("all clear at once with Mark all read", async () => {
+    crewReplies.push(unreadCrew());
+    await mount();
+    fireEvent.keyDown(window, { key: "2" });
+    fireEvent.click(screen.getByTestId("filter-unread"));
+    fireEvent.click(screen.getByTestId("mark-all-read"));
+    await act(async () => { fireEvent.click(screen.getByTestId("mark-all-read")); });
+    expect(screen.queryByTestId("unread-badge")).not.toBeInTheDocument();
+    expect(JSON.parse(seenCalls()[0][1].body)).toEqual({ all: true, upTo: 5000 });
   });
 });
 ```
@@ -1921,18 +2119,22 @@ Expected: FAIL — the badge still derives from localStorage; opening a thread d
 4. Add after `comment`:
 
 ```ts
-  /** Opening a thread reads it. Local first, so the badge drops as you tap. */
-  const markSeen = useCallback((itemId: string) => {
-    setSeen((prev) => ({ ...prev, [itemId]: Date.now() }));
-    send("/api/seen", { itemId }, "couldn't mark that as read");
+  /**
+   * Opening a thread reads it, up to the newest comment it showed. Applied
+   * locally first so the badge drops as you tap.
+   */
+  const markSeen = useCallback((itemId: string, upTo: number) => {
+    setSeen((prev) => mergeSeen(prev, { [itemId]: upTo }));
+    send("/api/seen", { itemId, upTo }, "couldn't mark that as read");
+  }, [send]);
+
+  const markAllSeen = useCallback((upTo: number) => {
+    setSeen((prev) => mergeSeen(prev, { [FLOOR]: upTo }));
+    send("/api/seen", { all: true, upTo }, "couldn't mark everything read");
   }, [send]);
 ```
 
-   In `comment`, after the `setEngagement(...)` call add (the server does the same on its side):
-
-```ts
-    setSeen((prev) => ({ ...prev, [itemId]: mine.at }));
-```
+   (Add `FLOOR` to the `@/lib/unread` import.) `comment` is unchanged: your own comments are never unread, and the thread you reply in is open, which already marked it read.
 
 5. Delete the whole `useEffect` headed `// Opening the feed is what clears the badge; …`.
 6. Replace the `unreadComments` computation with:
@@ -1942,7 +2144,7 @@ Expected: FAIL — the badge still derives from localStorage; opening a thread d
 ```
 
 7. Badge `<span>`: add `key={unreadComments}`, add `badge-pop` to its `className`, and change `title` to `` `${unreadComments} unread — tap to go through them` ``.
-8. `<Feed>`: replace `seen={{ _floor: unreadSince.current }}` with `seen={seen}` and add `onSeen={markSeen}`.
+8. `<Feed>`: replace `seen={{ _floor: unreadSince.current }}` with `seen={seen}` and add `onSeen={markSeen}` and `onMarkAllSeen={markAllSeen}`.
 9. Shortcuts list: `[["1 2 3", "Board, Feed, You"], ["t w a", "Today, week, all time"], ["n", "Next unread comment"], ["g", "Back to top"], ["r", "Refresh"], ["?", "This list"]]`.
 
 `web/app/globals.css`, after `.card-arrive`:

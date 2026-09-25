@@ -24,8 +24,8 @@ at (misses, comments, one friend) takes one tap.
 
 ## 2. Scope
 
-In: server-side per-thread read state, reworked badge, "Next unread", filter
-bar, day headers, paged rendering, back-to-top.
+In: server-side per-thread read state, reworked badge, "Next unread", "Mark
+all read", filter bar, day headers, paged rendering, back-to-top.
 
 Out (covered by later pieces, see §9): text search, sample sentences, notes,
 cross-deck word lookup. Reactions stay non-notifying.
@@ -43,22 +43,46 @@ unread(comment, item, viewer, seen) =
   && comment.at > max(seen[item.id] ?? 0, seen._floor)
 ```
 
-**Rollout floor:** the first time `/api/crew` is served to a user whose hash has
-no `_floor`, the server writes `_floor = now − 7 days` (HSETNX, so concurrent
-first loads agree). Comments older than a week start read; newer ones start
-unread — Adam's 行う comment shows up immediately.
+**Floor (computed, not a one-time stamp):** the `_floor` returned to the
+client is
+
+```
+max( SHIP_FLOOR,                    // 2026-09-18T00:00Z, a week before this shipped
+     profile.joinedAt − 7 days,     // someone who joins later skips old threads
+     stored _floor )                // "Mark all read" (§4a)
+```
+
+It depends on fixed dates, never on when you happen to visit, so being away
+for any length of time can't turn a comment into "read". Adam's 行う comment
+(25 Sep) is unread for JP. A viewer with no profile yet uses `SHIP_FLOOR`.
+
+**Times come from what you were shown, not the server clock.** Every "mark
+read" sends `upTo` = the newest comment time the client had on screen for
+that thread (or across all threads for Mark all read). The server stores
+`min(upTo, now)`. Stamping with the server's `now` would silently mark read a
+comment that was posted after your last refresh but before your tap — one
+you never saw.
+
+**Read times only move forward.** The server stores `max(existing, new)` for
+a thread and for the floor, so a second device with stale data can't un-read
+what you already read elsewhere. The client merges server state with its own
+the same way (`mergeSeen`).
 
 **API:**
 - `GET /api/crew` additionally returns `seen: Record<string, number>` for the
-  viewer (including `_floor`).
-- `POST /api/seen?key=…` body `{ itemId }` → sets `seen[itemId] = now`, returns
-  `{ at }`. Auth as `/api/comment` (key → user). 400 on missing/oversized
-  itemId, 401 on unknown key.
-- Posting a comment also marks that thread seen for its author (so your own
-  reply doesn't leave older comments in that thread unread).
+  viewer (including the computed `_floor`).
+- `POST /api/seen?key=…`, body either `{ itemId, upTo }` (one thread) or
+  `{ all: true, upTo }` (raise the floor). Returns `{ ok, at }` where
+  `at = min(upTo, now)`. Auth as `/api/comment` (key → user). 400 on: missing,
+  non-finite or ≤ 0 `upTo`; missing/oversized itemId; itemId `"_floor"`;
+  both `all` and `itemId`. 401 on unknown key.
+- Posting a comment does **not** mark anything read on the server. You can
+  only reply with the thread open, and having it open already marks it read
+  (with the correct `upTo`).
 
-**Client:** opening a thread calls `onSeen(itemId)`, which updates local `seen`
-optimistically and POSTs; on failure it reloads (same pattern as `react`).
+**Client:** having a thread open with anything unread in it calls
+`onSeen(itemId, upTo)`. That updates local `seen` right away, then POSTs; if the
+POST fails the page reloads (same pattern as `react`).
 
 `lib/seen.ts` loses `commentsSeenAt`; the rest of it (totals/order for the
 Board) is untouched.
@@ -75,6 +99,13 @@ Board) is untouched.
 - Inside an open thread, when other unread threads exist, a **"Next unread →"**
   pill sits under the comment input. It opens the next unread thread (ordered
   by newest unread comment first) and scrolls it to center. Keyboard: `n`.
+- **Mark all read (§4a).** With the Unread filter on and anything unread, a
+  slim row sits above the list: "12 unread threads · Mark all read". The first
+  tap changes the button to "Tap again to mark 12 read", and it goes back
+  after 3 s. The second tap sends `{ all: true, upTo: newest comment on
+  screen }`. Cards that were only still listed because they had been unread
+  are cleared from the list, so the caught-up row shows. Comments posted
+  later still notify you.
 - "new" pills inside a thread use the `seen` value from *before* the thread was
   opened, captured when it opens, so marking it read doesn't make the pills
   vanish while you're reading.
@@ -131,9 +162,12 @@ Shortcuts sheet gains `n` (next unread) and `g` (top).
 ## 8. Testing
 
 - `lib/unread.ts` — unit: others-only, per-item seen, floor, missing seen.
-- `store` — `markSeen`, `getSeen`, `_floor` set-once (HSETNX) behaviour.
-- `/api/seen` — 200 / 400 / 401; comment POST marks author's thread seen.
-- `/api/crew` — includes `seen`; initialises `_floor` once.
+- `store` — computed floor (ship date / joinedAt / stored); thread and floor
+  times never move backwards.
+- `/api/seen` — one thread, all, `upTo` clamped to now, every 400/401 case.
+- `/api/crew` — includes `seen` with the floor computed from the viewer's
+  `joinedAt`.
+- Mark all read — two taps, timeout reset, sends the newest shown time.
 - `Feed` — outcome/comments/unread filters combine; sticky unread; empty
   state; day headers in given tz; 30 + "Show more"; jump into unrendered
   range extends window; Next unread order; new pills persist while open.
