@@ -85,7 +85,7 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
                 data-testid={`outcome-${value}`}
                 aria-pressed={on}
                 onClick={() => set({ outcome: value })}
-                className="min-h-7 rounded-full px-2.5 text-[11.5px] transition-colors duration-150"
+                className="min-h-8 rounded-full px-2.5 text-[11.5px] transition-colors duration-150"
                 style={{
                   background: on ? "var(--pane-lift)" : "transparent",
                   color: on ? color : "var(--ink-faint)",
