@@ -34,6 +34,9 @@ function crew(
     feed: [card],
     engagement,
     seen,
+    noteTypes: { Core: ["Vocabulary-Kanji", "Vocabulary-English"] },
+    fieldMaps: { jp: {}, peter: {} },
+    inMyDeck: {},
   };
 }
 
@@ -298,5 +301,27 @@ describe("what's new", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Got it" }));
     expect(screen.queryByTestId("whats-new")).toBeNull();
     expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
+  });
+});
+
+describe("card fields", () => {
+  it("saves your choice and applies it straight away", async () => {
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "Vocabulary-English" } });
+    const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/fieldmap"));
+    expect(JSON.parse(call![1].body)).toEqual({ noteType: "Core", map: { word: "Vocabulary-English" } });
+    expect(screen.getByLabelText("Core Word")).toHaveValue("Vocabulary-English");
+  });
+
+  it("goes back to what was saved, and says so, when the save fails", async () => {
+    writeReply = new Response("{}", { status: 500 });
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "Vocabulary-English" } });
+    });
+    await waitFor(() => expect(screen.getByLabelText("Core Word")).toHaveValue(""));
+    expect(screen.getByTestId("sync-note")).toHaveTextContent(/didn't save/i);
   });
 });

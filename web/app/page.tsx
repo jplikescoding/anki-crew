@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Board, { type Range } from "@/app/components/Board";
+import CardFields from "@/app/components/CardFields";
 import CrewChart from "@/app/components/CrewChart";
 import Feed, { ago } from "@/app/components/Feed";
 import PersonPanel from "@/app/components/PersonPanel";
@@ -12,7 +13,7 @@ import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
 import { FLOOR, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
-import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
+import type { CrewResponse, Engagement, FieldMap, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "you";
 const TABS: Tab[] = ["board", "feed", "you"];
@@ -162,6 +163,17 @@ export default function Page() {
       return { ...prev, [itemId]: { ...cur, comments: [...cur.comments, mine] } };
     });
     send("/api/comment", { itemId, text }, "your comment didn't post");
+  }, [data?.viewer, send]);
+
+  /** Applied locally first; a failed save reloads, which puts back what the server has. */
+  const saveFieldMap = useCallback((noteType: string, map: FieldMap) => {
+    if (!data?.viewer) return;
+    const me = data.viewer;
+    setData((d) => d && ({
+      ...d,
+      fieldMaps: { ...d.fieldMaps, [me]: { ...(d.fieldMaps?.[me] ?? {}), [noteType]: map } },
+    }));
+    send("/api/fieldmap", { noteType, map }, "your card fields didn't save");
   }, [data?.viewer, send]);
 
   /**
@@ -413,6 +425,14 @@ export default function Page() {
               />
             )}
           </div>
+          {selected.profile.id === data.viewer && (
+            <CardFields
+              noteTypes={data.noteTypes ?? {}}
+              fieldMaps={data.fieldMaps?.[data.viewer] ?? {}}
+              items={data.feed.filter((i) => i.user === data.viewer)}
+              onSave={saveFieldMap}
+            />
+          )}
           <PersonPanel person={selected} items={data.feed} fieldMaps={data.fieldMaps?.[selected.profile.id]} />
         </>
       )}

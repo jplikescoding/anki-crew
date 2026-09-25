@@ -8,6 +8,14 @@ export type Note = { id: string; date: string; title: string; items: string[] };
 
 export const NOTES: Note[] = [
   {
+    id: "2026-09-sentences",
+    date: "September 2026",
+    title: "Sentences + is it in my deck?",
+    items: [
+      "Cards show the real word now, tap 例 (or the Sentences switch) for the example sentence, and friends' cards tell you if that word's in your deck — git pull your publisher to get the badges.",
+    ],
+  },
+  {
     id: "2026-09-board",
     date: "September 2026",
     title: "Board fixes",
