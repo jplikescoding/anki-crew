@@ -182,7 +182,7 @@ export default function FeedCard({
             aria-pressed={showSentence}
             onClick={() => setFlipped((f) => !f)}
             title={showSentence ? "Hide the sentence" : "Show the sentence"}
-            className="jp inline-flex min-h-7 items-center rounded-full px-2 text-[12px] transition-colors"
+            className="jp inline-flex min-h-8 items-center rounded-full px-2 text-[12px] transition-colors"
             style={{
               color: showSentence ? "var(--violet-soft)" : "var(--ink-faint)",
               background: showSentence ? "var(--pane-lift)" : "transparent",
