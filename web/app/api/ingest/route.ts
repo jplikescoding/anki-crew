@@ -11,9 +11,44 @@ import type { IngestBody } from "@/lib/types";
 export const MAX_DAYS = 8000;
 export const MAX_RECENT_CARDS = 500;
 
+// Caps for the named-fields release. The publisher trims to these itself, so
+// hitting one means a bug or a forged payload, not a big collection.
+export const MAX_FIELDS = 30;
+export const MAX_FIELD_CHARS = 200;
+export const MAX_NOTE_TYPES = 50;
+export const MAX_FIELD_NAMES = 50;
+export const MAX_WORDS = 50000;
+export const MAX_WORD_CHARS = 20;
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COUNTERS = ["reviews", "minutes", "newCards",
                   "ease1", "ease2", "ease3", "ease4"] as const;
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+function looksLikeFields(v: unknown): boolean {
+  if (!isRecord(v)) return false;
+  const entries = Object.entries(v);
+  return entries.length <= MAX_FIELDS
+    && entries.every(([, s]) => typeof s === "string" && s.length <= MAX_FIELD_CHARS);
+}
+
+function looksLikeNoteTypes(v: unknown): boolean {
+  if (!isRecord(v)) return false;
+  const entries = Object.entries(v);
+  return entries.length <= MAX_NOTE_TYPES && entries.every(([, names]) =>
+    Array.isArray(names) && names.length <= MAX_FIELD_NAMES && names.every((n) => typeof n === "string"));
+}
+
+function looksLikeWords(v: unknown): boolean {
+  if (!isRecord(v)) return false;
+  const lists = (["known", "learning", "new"] as const).map((k) => v[k]);
+  if (!lists.every(Array.isArray)) return false;
+  const all = (lists as unknown[][]).flat();
+  return all.length <= MAX_WORDS
+    && all.every((w) => typeof w === "string" && w.length > 0 && w.length <= MAX_WORD_CHARS);
+}
 
 function looksLikeDay(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
@@ -26,7 +61,9 @@ function looksLikeFeedItem(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const c = value as Record<string, unknown>;
   return typeof c.id === "string" && typeof c.front === "string"
-    && typeof c.ts === "number";
+    && typeof c.ts === "number"
+    && (c.noteType === undefined || (typeof c.noteType === "string" && c.noteType.length <= 100))
+    && (c.fields === undefined || looksLikeFields(c.fields));
 }
 
 function looksLikeIngestBody(value: unknown): value is IngestBody {
@@ -43,7 +80,9 @@ function looksLikeIngestBody(value: unknown): value is IngestBody {
     && typeof allTime.reviews === "number"
     && typeof allTime.firstReviewAt === "number"
     && Array.isArray(b.days) && b.days.every(looksLikeDay)
-    && Array.isArray(b.recentCards) && b.recentCards.every(looksLikeFeedItem);
+    && Array.isArray(b.recentCards) && b.recentCards.every(looksLikeFeedItem)
+    && (b.noteTypes === undefined || looksLikeNoteTypes(b.noteTypes))
+    && (b.words === undefined || looksLikeWords(b.words));
 }
 
 function tooLarge(value: unknown): boolean {

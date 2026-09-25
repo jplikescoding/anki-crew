@@ -150,4 +150,36 @@ describe("POST /api/ingest", () => {
     expect(res.status).toBe(400);
     expect(saveSnapshot).not.toHaveBeenCalled();
   });
+
+  it("accepts a payload from an older publisher with none of the new keys", async () => {
+    const payload = contract();
+    delete payload.noteTypes; delete payload.words;
+    delete payload.recentCards[0].noteType; delete payload.recentCards[0].fields;
+    expect((await POST(req(payload))).status).toBe(200);
+  });
+
+  it("accepts a publish that left out an unchanged word index", async () => {
+    const payload = contract();
+    delete payload.words;
+    expect((await POST(req(payload))).status).toBe(200);
+  });
+
+  it.each([
+    ["fields that aren't strings", (p: any) => { p.recentCards[0].fields = { A: 5 }; }],
+    ["too many fields", (p: any) => {
+      p.recentCards[0].fields = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [`F${i}`, "x"])); }],
+    ["a field over 200 characters", (p: any) => { p.recentCards[0].fields = { A: "x".repeat(201) }; }],
+    ["a note type name that isn't a string", (p: any) => { p.recentCards[0].noteType = 7; }],
+    ["noteTypes that aren't lists of names", (p: any) => { p.noteTypes = { T: "Expression" }; }],
+    ["too many note types", (p: any) => {
+      p.noteTypes = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`T${i}`, []])); }],
+    ["a word list missing a status", (p: any) => { p.words = { known: [], learning: [] }; }],
+    ["a word over 20 characters", (p: any) => { p.words.new = ["あ".repeat(21)]; }],
+    ["too many words", (p: any) => { p.words.new = Array.from({ length: 50001 }, (_, i) => `w${i}`); }],
+  ])("rejects %s", async (_name, mangle) => {
+    const payload = contract();
+    mangle(payload);
+    expect((await POST(req(payload))).status).toBe(400);
+    expect(saveSnapshot).not.toHaveBeenCalled();
+  });
 });
