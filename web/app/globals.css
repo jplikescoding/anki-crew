@@ -104,6 +104,13 @@ body {
 }
 .lane-enter { animation: lane-settle 420ms cubic-bezier(.22,.8,.3,1) both; }
 
+/* The card you were taken to glows once as it lands, so the eye finds it. */
+@keyframes card-arrive {
+  from { box-shadow: 0 0 0 1px rgba(103,232,249,.45), 0 0 26px rgba(103,232,249,.16); }
+  to   { box-shadow: 0 0 0 1px transparent, 0 0 0 transparent; }
+}
+.card-arrive { animation: card-arrive 900ms cubic-bezier(.22,.8,.3,1) 1; }
+
 @keyframes overtake-sweep {
   0%   { background-position: -120% 0; }
   100% { background-position: 220% 0; }

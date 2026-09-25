@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import BackToTop, { scrollBehavior, scrollToTop } from "@/app/components/BackToTop";
 import FeedCard from "@/app/components/FeedCard";
 import FeedFilters from "@/app/components/FeedFilters";
 import {
@@ -15,7 +16,7 @@ export const PAGE = 30;
 
 export default function Feed({
   items, people, engagement = {}, viewer, apiKey,
-  onReact, onComment, seen = {}, onSeen, jumpSignal = 0,
+  onReact, onComment, seen = {}, onSeen, jumpSignal = 0, onMarkAllSeen,
 }: {
   items: FeedItem[];
   people: PersonView[];
@@ -30,6 +31,8 @@ export default function Feed({
   onSeen?: (itemId: string, upTo: number) => void;
   /** Bumping this opens the thread with the newest unread comment. */
   jumpSignal?: number;
+  /** Mark every comment read up to this time. */
+  onMarkAllSeen?: (upTo: number) => void;
 }) {
   const [filter, setFilter] = useState<FeedFilter>(NO_FILTER);
   const [limit, setLimit] = useState(PAGE);
@@ -43,7 +46,11 @@ export default function Feed({
   const [baseline, setBaseline] = useState<Record<string, number>>({});
   // Keyed by card, so a half-written comment stays on the card it was for.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const unreadRef = useRef<HTMLLIElement | null>(null);
+  const cardRefs = useRef(new Map<string, HTMLLIElement>());
+  // The card to bring into view once it's rendered.
+  const [target, setTarget] = useState<string | null>(null);
+  // The card you were just taken to, which glows once as it arrives.
+  const [arrived, setArrived] = useState<string | null>(null);
   const jumpedFor = useRef(0);
   // The newest comment each thread was last marked read for. A save that fails
   // reloads the old read state; without this, that would ask again, fail
@@ -83,6 +90,32 @@ export default function Feed({
     if (!next.unread) setPinned(new Set());
   };
 
+  // Mark all read takes two taps. The first only arms it, for 3 seconds.
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const t = window.setTimeout(() => setArming(false), 3000);
+    return () => window.clearTimeout(t);
+  }, [arming]);
+
+  const markAll = () => {
+    if (!arming) { setArming(true); return; }
+    setArming(false);
+    // Up to the newest comment on screen, so one that lands a second later still notifies.
+    onMarkAllSeen?.(Math.max(0, ...Object.values(engagement).map(newestIn)));
+    // Let go of the cards kept only because they had been unread.
+    setPinned(new Set());
+  };
+
+  const goTo = (id: string) => {
+    openThreadFor(id);
+    setTarget(id);
+  };
+
+  const shownIds = new Set(shown.map((i) => i.id));
+  // Newest unread first, among what the current filters show.
+  const nextUnread = unread.find((id) => id !== openThread && shownIds.has(id)) ?? null;
+
   const openThreadFor = (id: string) => {
     setBaseline((prev) => ({ ...prev, [id]: readUpTo(seen, id) }));
     setOpenThread(id);
@@ -91,15 +124,39 @@ export default function Feed({
   const freshSince = (id: string) =>
     !me ? Infinity : openThread === id ? (baseline[id] ?? readUpTo(seen, id)) : readUpTo(seen, id);
 
-  // Once per bump: a refresh that moves the first unread card must not drag
-  // you away from whatever you are reading.
+  // Scroll once the card is rendered, growing the page first if it's further down.
   useEffect(() => {
-    if (jumpSignal > 0 && jumpSignal !== jumpedFor.current && unreadRef.current) {
-      jumpedFor.current = jumpSignal;
-      unreadRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      if (firstUnreadId) openThreadFor(firstUnreadId);
-    }
+    if (!target) return;
+    const idx = shown.findIndex((i) => i.id === target);
+    if (idx < 0) { setTarget(null); return; }
+    if (idx >= limit) { setLimit(Math.ceil((idx + 1) / PAGE) * PAGE); return; }
+    cardRefs.current.get(target)?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
+    setArrived(target);
+    setTarget(null);
+  }, [target, shown, limit]);
+
+  // Once per bump: a refresh that brings in newer comments must not drag you
+  // away from whatever you are reading. Other filters are dropped because
+  // they could hide the very card the badge is pointing at.
+  useEffect(() => {
+    if (jumpSignal === 0 || jumpSignal === jumpedFor.current) return;
+    jumpedFor.current = jumpSignal;
+    changeFilter({ ...NO_FILTER, unread: true });
+    if (firstUnreadId) goTo(firstUnreadId);
   }, [jumpSignal, firstUnreadId]);
+
+  // Re-bound every render so it always sees the current next thread.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const k = e.key.toLowerCase();
+      if (k === "n" && nextUnread) goTo(nextUnread);
+      else if (k === "g") scrollToTop();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Having a thread open is reading it, including comments that land while it is.
   useEffect(() => {
@@ -147,6 +204,28 @@ export default function Feed({
         >
           All caught up ✓
         </p>
+      )}
+
+      {filter.unread && unread.length > 0 && onMarkAllSeen && (
+        <div
+          className="mx-3 mt-3 flex items-center justify-between gap-3 px-1.5 text-[11.5px]"
+          style={{ color: "var(--ink-faint)" }}
+        >
+          <span className="tabular-nums">
+            {unread.length} unread thread{unread.length === 1 ? "" : "s"}
+          </span>
+          <button
+            data-testid="mark-all-read"
+            onClick={markAll}
+            className="min-h-8 rounded-full px-3 transition-colors duration-150"
+            style={{
+              color: arming ? "#04121A" : "var(--cyan-soft)",
+              background: arming ? "var(--cyan)" : "transparent",
+            }}
+          >
+            {arming ? `Tap again to mark ${unread.length} read` : "Mark all read"}
+          </button>
+        </div>
       )}
 
       {shown.length === 0 ? (
@@ -201,7 +280,21 @@ export default function Feed({
                     onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
                     onSubmit={() => submit(item.id)}
                     onReact={onReact}
-                    cardRef={item.id === firstUnreadId ? unreadRef : undefined}
+                    cardRef={(el) => {
+                      if (el) cardRefs.current.set(item.id, el);
+                      else cardRefs.current.delete(item.id);
+                    }}
+                    arrived={arrived === item.id}
+                    footer={openThread === item.id && nextUnread ? (
+                      <button
+                        data-testid="next-unread"
+                        onClick={() => goTo(nextUnread)}
+                        className="mt-2.5 inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-[11.5px] transition-colors duration-150"
+                        style={{ borderColor: "rgba(34,211,238,.3)", background: "rgba(34,211,238,.06)", color: "var(--cyan-soft)" }}
+                      >
+                        Next unread <span aria-hidden>→</span>
+                      </button>
+                    ) : undefined}
                   />
                 ))}
               </ul>
@@ -219,6 +312,8 @@ export default function Feed({
           )}
         </div>
       )}
+
+      <BackToTop />
     </div>
   );
 }

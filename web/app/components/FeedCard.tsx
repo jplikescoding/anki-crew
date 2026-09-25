@@ -21,7 +21,7 @@ export function ago(ts: number, now: number): string {
 
 export default function FeedCard({
   item, byId, indexOf, engagement, viewer, canWrite, now, hidden, onToggleQuiz,
-  open, onToggleThread, freshSince, draft, onDraft, onSubmit, onReact, cardRef, footer,
+  open, onToggleThread, freshSince, draft, onDraft, onSubmit, onReact, cardRef, footer, arrived,
 }: {
   item: FeedItem;
   byId: Map<string, PersonView>;
@@ -41,6 +41,8 @@ export default function FeedCard({
   onReact?: (itemId: string, emoji: string | null) => void;
   cardRef?: Ref<HTMLLIElement>;
   footer?: ReactNode;           // under the comment box while open
+  /** Just navigated to; glows once. */
+  arrived?: boolean;
 }) {
   const lapse = item.ease === 1;
   const who = byId.get(item.user);
@@ -62,7 +64,7 @@ export default function FeedCard({
       data-testid={`item-${item.id}`}
       data-lapse={String(lapse)}
       ref={cardRef}
-      className="pane overflow-hidden"
+      className={`pane overflow-hidden${arrived ? " card-arrive" : ""}`}
       style={{ borderColor: lapse ? "rgba(251,113,133,.24)" : "var(--edge)" }}
     >
       <button
