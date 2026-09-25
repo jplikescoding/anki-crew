@@ -12,6 +12,14 @@ export type DayRow = {
   perDeck: Record<string, number>;
 };
 
+export type DeckStatus = "known" | "learning" | "new";
+export type WordIndex = Record<DeckStatus, string[]>;
+export type FieldRole = "word" | "meaning" | "sentence";
+/** One person's choices for one note type. Only overridden roles are present. */
+export type FieldMap = Partial<Record<FieldRole, string>>;
+/** Note type name -> choices. */
+export type FieldMaps = Record<string, FieldMap>;
+
 export type FeedItem = {
   id: string;              // "<userId>:<revlogId>" -- stable across republishes
   user: string;
@@ -21,6 +29,9 @@ export type FeedItem = {
   ease: number;
   ivl: number;
   ts: number;              // epoch ms
+  /** From publishers that send named fields. Absent on older items. */
+  noteType?: string;
+  fields?: Record<string, string>;   // may contain <b>…</b>, nothing else
 };
 
 export type Profile = {
@@ -50,6 +61,9 @@ export type IngestBody = {
   days: DayRow[];
   allTime: { reviews: number; firstReviewAt: number };
   recentCards: FeedItem[];
+  noteTypes?: Record<string, string[]>;
+  /** Left out when unchanged since the last publish. */
+  words?: WordIndex;
 };
 
 export type Comment = { user: string; text: string; at: number };
@@ -71,4 +85,10 @@ export type CrewResponse = {
   engagement: Record<string, Engagement>;
   /** How far the viewer has read each thread, plus "_floor". See lib/unread. */
   seen: Record<string, number>;
+  /** Everyone's field overrides, by user id. */
+  fieldMaps?: Record<string, FieldMaps>;
+  /** The viewer's own note types and their field names. */
+  noteTypes?: Record<string, string[]>;
+  /** Friends' cards only: is that word in the viewer's decks. */
+  inMyDeck?: Record<string, DeckStatus | "none">;
 };
