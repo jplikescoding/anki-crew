@@ -69,4 +69,6 @@ export type CrewResponse = {
   feed: FeedItem[];
   /** Keyed by feed item id, and only for items that have any. */
   engagement: Record<string, Engagement>;
+  /** How far the viewer has read each thread, plus "_floor". See lib/unread. */
+  seen: Record<string, number>;
 };

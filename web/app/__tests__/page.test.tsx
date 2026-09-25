@@ -28,6 +28,7 @@ function crew(engagement: Record<string, Engagement> = {}, jpPublishedAt = Date.
     people: [person("jp", "JP", 10, jpPublishedAt), person("peter", "Peter", 5)],
     feed: [card],
     engagement,
+    seen: {},
   };
 }
 

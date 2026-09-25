@@ -7,11 +7,16 @@ const person: PersonView = {
   days: [],
 };
 
+const { getSeen } = vi.hoisted(() => ({
+  getSeen: vi.fn(async (_id: string) => ({ _floor: 42, "peter:1": 7 })),
+}));
+
 vi.mock("@/lib/store", () => ({
   listUsers: async () => ["jp"],
   getPerson: async (id: string) => (id === "jp" ? person : null),
   getFeed: async () => [],
   getEngagement: async () => ({}),
+  getSeen,
 }));
 
 import { GET } from "@/app/api/crew/route";
@@ -36,5 +41,11 @@ describe("GET /api/crew", () => {
     expect(json.viewer).toBe("jp");
     expect(json.people).toHaveLength(1);
     expect(json.people[0].profile.displayName).toBe("JP");
+  });
+
+  it("includes what the viewer has read", async () => {
+    const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
+    expect((await res.json()).seen).toEqual({ _floor: 42, "peter:1": 7 });
+    expect(getSeen).toHaveBeenCalledWith("jp");
   });
 });
