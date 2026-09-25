@@ -23,8 +23,8 @@ class TestBuildPayload(unittest.TestCase):
         payload = P.build_payload(_seeded(), "jp", "JP", "America/New_York", 4)
         self.assertEqual(
             sorted(payload),
-            ["allTime", "days", "displayName", "generatedAt", "recentCards",
-             "streak", "todayKey", "tz", "user"])
+            ["allTime", "days", "displayName", "generatedAt", "noteTypes", "recentCards",
+             "streak", "todayKey", "tz", "user", "words"])
 
     def test_today_key_and_streak_come_from_the_publisher(self):
         # Only this machine knows its own rollover hour and local clock, so the
@@ -44,6 +44,11 @@ class TestBuildPayload(unittest.TestCase):
     def test_feed_items_are_stamped_with_the_user(self):
         payload = P.build_payload(_seeded(), "jp", "JP", "UTC", 4)
         self.assertTrue(payload["recentCards"][0]["id"].startswith("jp:"))
+
+    def test_payload_carries_note_types_and_the_word_index(self):
+        payload = P.build_payload(_seeded(), "jp", "JP", "UTC", 4)
+        self.assertEqual(payload["noteTypes"], {"Japanese Vocab Dynamic": ["Expression", "Meaning"]})
+        self.assertEqual(payload["words"]["known"], ["話す"])
 
     def test_matches_the_committed_contract_fixture(self):
         # The web tests load this same file. If the shape changes, both sides fail.

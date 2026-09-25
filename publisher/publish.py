@@ -17,6 +17,7 @@ import urllib.request
 import anki_reader
 import feed as feed_mod
 import stats as stats_mod
+import words as words_mod
 from collection_paths import find_collections
 from daybuckets import today_key
 
@@ -118,6 +119,8 @@ def build_payload(con, user, display_name, tz, rollover, feed_limit=200, now=Non
         "days": days,
         "allTime": stats_mod.all_time(con),
         "recentCards": feed_mod.feed_items(con, decks, user, limit=feed_limit),
+        "noteTypes": words_mod.note_types(con),
+        "words": words_mod.word_index(con),
     }
 
 

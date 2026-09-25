@@ -37,5 +37,9 @@
         "Sentence-English": "I speak to a friend."
       }
     }
-  ]
+  ],
+  "noteTypes": {
+    "Japanese Vocab Dynamic": ["Expression", "Meaning", "Reading", "Audio", "Sentence", "Sentence-English"]
+  },
+  "words": { "known": ["話しかける"], "learning": ["聞き取る"], "new": ["作り上げる"] }
 }
