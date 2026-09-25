@@ -47,22 +47,23 @@ keep working) and adds:
     stripped, and HTML entities are unescaped.
   - Fields that are empty after cleaning are dropped. That includes audio-only
     and image-only fields.
-  - Each value is capped at 200 characters.
+  - Each value is capped at 200 characters, and at most the first 30 non-empty
+    fields are sent.
 
 Field names come from the `fields` table (`ntid`, `ord`, `name`). Note type
 names come from `notetypes`.
 
 ### 3.2 `noteTypes`
 
-`{ noteTypeName: [fieldName, …] }` for every note type that has a card in a
-counted deck, with fields in `ord` order. It's small and is sent on every
-publish.
+`{ noteTypeName: [fieldName, …] }` for every note type that has at least one
+non-suspended card, with fields in `ord` order (at most 50 note types and 50
+names each). It's small and is sent on every publish.
 
 ### 3.3 `words` — the word index
 
 `{ "known": [...], "learning": [...], "new": [...] }`.
 
-- **Candidates:** for every note that has at least one card counted below,
+- **Candidates:** for every note that has at least one non-suspended card,
   every field whose cleaned value:
   - has `<b>` tags and `[…]` furigana readings removed, and whitespace
     stripped;
@@ -75,10 +76,12 @@ publish.
   - `known`: a review card (`type = 2`) with `ivl >= 21`.
   - `learning`: any other card that has been seen (`type` 1, 2 or 3).
   - `new`: `type = 0`.
-  - Suspended (`queue = -1`) and buried cards (`queue` -2/-3) are ignored.
-    A note whose cards are all ignored contributes nothing.
+  - Suspended cards (`queue = -1`) are ignored. Buried cards count, since
+    they come back the next day and badges shouldn't flicker. A note whose
+    cards are all suspended contributes nothing.
 - A word found in several notes takes its best status. Each word appears in
-  exactly one list.
+  exactly one list. If there are more than 50,000 entries, known words are kept
+  first, then learning, then new.
 - **Send only when changed:** the publisher hashes (sha256) the sorted index
   and stores `wordsHash` in `state.json`. If the hash is unchanged it leaves
   `words` out of the payload. It records the new hash only after a successful
@@ -101,9 +104,9 @@ badges".
 New optional keys are validated. A bad value rejects the whole payload with
 400, as today:
 
-- `fields`: object of string → string, ≤ 20 entries, values ≤ 200 characters.
+- `fields`: object of string → string, ≤ 30 entries, values ≤ 200 characters.
 - `noteType`: string ≤ 100 characters.
-- `noteTypes`: ≤ 50 entries, each an array of ≤ 30 strings.
+- `noteTypes`: ≤ 50 entries, each an array of ≤ 50 strings.
 - `words`: the three arrays, ≤ 50,000 entries in total, each ≤ 20 characters.
 
 ### 4.2 Storage (`lib/store.ts`)
@@ -130,8 +133,10 @@ Adds:
   1. For each item that has `fields`, resolve its word (§5.1) using the
      owner's field map.
   2. Normalize it.
-  3. Look all the words up in one `HMGET` against the viewer's hash. A miss
-     is `"none"`.
+  3. Skip any word longer than 20 characters after normalizing. That's a
+     sentence card, and the index never holds sentences, so it gets no badge.
+  4. Look all the remaining words up in one `HMGET` against the viewer's
+     hash. A miss is `"none"`.
 
   If the viewer has no index at all (the key doesn't exist), `inMyDeck` is
   `{}`, so no badges show rather than every card claiming "none". Items
@@ -169,8 +174,8 @@ Adds:
     - Otherwise, `expression` when it wasn't used as the word, as in JP's
       iKnow notes.
   - **translation:** a field containing `sentence` or `example` and also
-    `english` or `translation`. When the sentence came from `expression`,
-    the note's `meaning` field is the translation instead.
+    `english` or `translation`. If there's no such field and the sentence came
+    from `expression`, the note's `meaning` field is the translation instead.
 - `resolveCard(item, override?)` returns
   `{ word, meaning, sentence?, translation? }` as strings (they may contain
   `<b>`).
@@ -204,8 +209,14 @@ Adds:
     in component state (not persisted).
   - The sentence renders with the bold parts bold. The translation sits under
     it in dim text.
-  - Clicks inside the sentence area and on the 例 button don't open the
-    thread.
+  - The sentence block sits outside the card's tap-to-quiz button, so tapping
+    it does nothing. The 例 button sits in the reactions row. Quiz mode blurs
+    the translation along with the meaning.
+
+### 5.2b Person panel
+
+"Recent cards" uses the same `resolveCard` word and meaning, so Adam's panel
+stops showing "5493".
 
 ### 5.3 Feed switch (`FeedFilters.tsx`)
 
