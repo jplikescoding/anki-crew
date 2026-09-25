@@ -107,6 +107,14 @@ describe("deckWord", () => {
     expect(deckWord(item({ Expression: "今日は一人で映画を見ます。とても楽しかった。", Meaning: "…" }))).toBeNull();
   });
 
+  it("is null for a short sentence card", () => {
+    expect(deckWord(item({ Expression: "今日は一人で映画を見ます。", Meaning: "…" }))).toBeNull();
+  });
+
+  it("keeps a word that carries a parenthetical note", () => {
+    expect(deckWord(item({ Expression: "毎年 (xnen)", Meaning: "every year" }))).toBe("毎年");
+  });
+
   it("is null for items without fields", () => {
     expect(deckWord(item())).toBeNull();
   });

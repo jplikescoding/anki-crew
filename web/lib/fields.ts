@@ -66,7 +66,8 @@ export function resolveCard(item: FeedItem, override: FieldMap = {}): Resolved {
 
 /** Must match normalize_word in publisher/words.py (see normalize.cases.json). */
 export function normalizeWord(s: string): string {
-  return s.replace(/<\/?b>/gi, "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, "");
+  return s.replace(/<\/?b>/gi, "").replace(/\[[^\]]*\]/g, "")
+    .replace(/\([^)]*\)|（[^）]*）/g, "").replace(/\s+/g, "");
 }
 
 /**
@@ -98,9 +99,11 @@ export function plainText(s: string): string {
 
 /** Mirrors the publisher's index: no badge for anything it would never hold. */
 const MAX_WORD_LEN = 20;
+const SENTENCE_PUNCT = /[。、！？!?．，]/;
 
 export function deckWord(item: FeedItem, override?: FieldMap): string | null {
   if (!item.fields || Object.keys(item.fields).length === 0) return null;
   const word = normalizeWord(resolveCard(item, override).word);
-  return word.length > 0 && word.length <= MAX_WORD_LEN ? word : null;
+  if (word.length === 0 || word.length > MAX_WORD_LEN) return null;
+  return SENTENCE_PUNCT.test(word) ? null : word;
 }

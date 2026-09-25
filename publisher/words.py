@@ -19,6 +19,7 @@ MAX_FIELD_NAMES = 50
 
 _BOLD = re.compile(r"</?b>", re.I)
 _FURIGANA = re.compile(r"\[[^\]]*\]")
+_PAREN = re.compile(r"\([^)]*\)|（[^）]*）")
 _JAPANESE = re.compile(r"[぀-ヿ㐀-䶿一-鿿]")
 _SENTENCE_PUNCT = re.compile(r"[。、！？!?．，]")
 _SENTENCE_NAMES = ("sentence", "example")
@@ -29,7 +30,7 @@ _RANKS = ("known", "learning", "new")
 
 def normalize_word(s):
     """Must match normalizeWord in web/lib/fields.ts (see normalize.cases.json)."""
-    s = _FURIGANA.sub("", _BOLD.sub("", s or ""))
+    s = _PAREN.sub("", _FURIGANA.sub("", _BOLD.sub("", s or "")))
     return "".join(s.split())
 
 
@@ -75,9 +76,10 @@ def word_index(con):
             if any(frag in name.lower() for frag in _SENTENCE_NAMES):
                 continue
             cleaned = clean_rich(raw)
-            if _SENTENCE_PUNCT.search(cleaned):
+            no_paren = _PAREN.sub("", cleaned)
+            if _SENTENCE_PUNCT.search(no_paren):
                 continue
-            stripped = cleaned.strip()
+            stripped = no_paren.strip()
             if " " in stripped or "　" in stripped:
                 continue
             word = normalize_word(cleaned)

@@ -68,13 +68,16 @@ names each). It's small and is sent on every publish.
   - field name, lowercased, contains neither `sentence` nor `example`;
   - cleaned value contains none of `。、！？!?．，`;
   - cleaned value, after stripping, contains no space (half- or full-width);
-  - normalized value (`<b>` tags and `[…]` furigana readings removed,
-    whitespace stripped) is 1–20 characters long and contains at least one
-    kana or kanji character.
+  - normalized value (`<b>` tags, `[…]` furigana readings and `(…)`/`（…）`
+    parenthetical notes removed, whitespace stripped) is 1–20 characters long
+    and contains at least one kana or kanji character.
 
-  A value with more fields than the note type has names is not a candidate.
-  This picks up the word, its kana and its furigana form without knowing which
-  field is which, and leaves sentences out.
+  The punctuation and space checks above run on the value with parenthetical
+  notes already removed, so a note like "毎年 (xnen)" isn't skipped just
+  because of the space before its parenthetical. A value with more fields
+  than the note type has names is not a candidate. This picks up the word,
+  its kana and its furigana form without knowing which field is which, and
+  leaves sentences out.
 - **Status per note, best of its cards:**
   - `known`: a review card (`type = 2`) with `ivl >= 21`.
   - `learning`: any other card that has been seen (`type` 1, 2 or 3).
@@ -90,9 +93,9 @@ names each). It's small and is sent on every publish.
   `words` out of the payload. It records the new hash only after a successful
   post.
 
-The normalization (strip `<b>`, strip `[…]`, strip whitespace) must match the
-dashboard's `normalizeWord` in §5.1. The contract sample gets a case that
-pins both sides.
+The normalization (strip `<b>`, strip `[…]`, strip `(…)`/`（…）` parenthetical
+notes, strip whitespace) must match the dashboard's `normalizeWord` in §5.1.
+The contract sample gets a case that pins both sides.
 
 ### 3.4 Compatibility
 
@@ -136,7 +139,8 @@ Adds:
   1. For each item that has `fields`, resolve its word (§5.1) using the
      owner's field map.
   2. Normalize it.
-  3. Skip any word longer than 20 characters after normalizing. That's a
+  3. Skip any word longer than 20 characters after normalizing, or that
+     contains sentence punctuation (`。、！？!?．，`). Either means it's a
      sentence card, and the index never holds sentences, so it gets no badge.
   4. Look all the remaining words up in one `HMGET` against the viewer's
      hash. A miss is `"none"`.
@@ -187,8 +191,8 @@ Adds:
   - With no `fields` it returns `{ word: front, meaning: back }`.
   - A mapped field that's missing on this item falls back to the guess, then
     to front/back.
-- `normalizeWord(s)`: strip `<b>`/`</b>`, strip `[…]` (furigana), strip all
-  whitespace.
+- `normalizeWord(s)`: strip `<b>`/`</b>`, strip `[…]` (furigana), strip
+  `(…)`/`（…）` (parenthetical notes), strip all whitespace.
 - `boldParts(s)`: splits on `<b>…</b>` into `{ text, bold }` pieces. It's
   rendered as React text nodes and never as HTML. Unmatched tags are treated
   as plain text.

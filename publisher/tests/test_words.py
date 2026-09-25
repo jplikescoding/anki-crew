@@ -115,6 +115,13 @@ class TestWordIndex(unittest.TestCase):
         idx = W.word_index(con)
         self.assertEqual(idx["new"], ["話す"])
 
+    def test_indexes_words_with_parenthetical_notes(self):
+        con = _con()
+        add_note(con, 1, 7, ["毎年 (xnen)", "", "", ""])
+        add_card(con, 10, 1, 5, ctype=0, queue=0)
+        idx = W.word_index(con)
+        self.assertEqual(idx["new"], ["毎年"])
+
     def test_caps_the_index_keeping_known_words_first(self):
         con = _con()
         add_note(con, 1, 7, ["話す", "", "", ""])
