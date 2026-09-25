@@ -164,6 +164,27 @@ describe("POST /api/ingest", () => {
     expect((await POST(req(payload))).status).toBe(200);
   });
 
+  // Python truncates field/word values to 200/20 code points; a naive .length
+  // check in JS counts UTF-16 units, rejecting non-BMP characters (emoji,
+  // rare kanji) well under the real limit.
+  it("accepts a field of 200 non-BMP characters, measured in code points", async () => {
+    const payload = contract();
+    payload.recentCards[0].fields = { A: "😀".repeat(200) };
+    expect((await POST(req(payload))).status).toBe(200);
+  });
+
+  it("rejects a field of 201 non-BMP characters", async () => {
+    const payload = contract();
+    payload.recentCards[0].fields = { A: "😀".repeat(201) };
+    expect((await POST(req(payload))).status).toBe(400);
+  });
+
+  it("accepts a words entry of 20 non-BMP kanji characters", async () => {
+    const payload = contract();
+    payload.words.new = ["𠮟".repeat(20)];
+    expect((await POST(req(payload))).status).toBe(200);
+  });
+
   it.each([
     ["fields that aren't strings", (p: any) => { p.recentCards[0].fields = { A: 5 }; }],
     ["too many fields", (p: any) => {

@@ -31,7 +31,7 @@ function looksLikeFields(v: unknown): boolean {
   if (!isRecord(v)) return false;
   const entries = Object.entries(v);
   return entries.length <= MAX_FIELDS
-    && entries.every(([, s]) => typeof s === "string" && s.length <= MAX_FIELD_CHARS);
+    && entries.every(([, s]) => typeof s === "string" && [...s].length <= MAX_FIELD_CHARS);
 }
 
 function looksLikeNoteTypes(v: unknown): boolean {
@@ -47,7 +47,7 @@ function looksLikeWords(v: unknown): boolean {
   if (!lists.every(Array.isArray)) return false;
   const all = (lists as unknown[][]).flat();
   return all.length <= MAX_WORDS
-    && all.every((w) => typeof w === "string" && w.length > 0 && w.length <= MAX_WORD_CHARS);
+    && all.every((w) => typeof w === "string" && w.length > 0 && [...w].length <= MAX_WORD_CHARS);
 }
 
 function looksLikeDay(value: unknown): boolean {

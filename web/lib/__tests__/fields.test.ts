@@ -118,4 +118,9 @@ describe("deckWord", () => {
   it("is null for items without fields", () => {
     expect(deckWord(item())).toBeNull();
   });
+
+  it("keeps a 20-character word made of non-BMP kanji, counted in code points", () => {
+    const w = "𠮟".repeat(20);
+    expect(deckWord(item({ Expression: w, Meaning: "scold" }))).toBe(w);
+  });
 });

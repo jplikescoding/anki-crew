@@ -104,6 +104,7 @@ const SENTENCE_PUNCT = /[。、！？!?．，]/;
 export function deckWord(item: FeedItem, override?: FieldMap): string | null {
   if (!item.fields || Object.keys(item.fields).length === 0) return null;
   const word = normalizeWord(resolveCard(item, override).word);
-  if (word.length === 0 || word.length > MAX_WORD_LEN) return null;
+  const len = [...word].length;
+  if (len === 0 || len > MAX_WORD_LEN) return null;
   return SENTENCE_PUNCT.test(word) ? null : word;
 }
