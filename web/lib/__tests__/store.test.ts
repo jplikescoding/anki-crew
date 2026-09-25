@@ -18,6 +18,9 @@ vi.mock("@upstash/redis", () => ({
       const h = state.hashes.get(key);
       return h ? Object.fromEntries(h) : null;
     }
+    async hget(key: string, field: string) {
+      return state.hashes.get(key)?.get(field) ?? null;
+    }
     async set(key: string, value: unknown) { state.strings.set(key, value); }
     async get(key: string) { return state.strings.get(key) ?? null; }
     async sadd(key: string, member: string) {
@@ -55,7 +58,7 @@ vi.mock("@upstash/redis", () => ({
 
 import {
   saveSnapshot, listUsers, getPerson, getFeed, markEngaged, setReaction, addComment,
-  getEngagement, setAvatar, FEED_CAP, COMMENT_CAP,
+  getEngagement, setAvatar, getSeen, markSeen, markAllSeen, FEED_CAP, COMMENT_CAP,
 } from "@/lib/store";
 import type { IngestBody, FeedItem } from "@/lib/types";
 
@@ -253,5 +256,41 @@ describe("setAvatar", () => {
     const p = await getPerson("jp");
     expect(p?.profile.avatar).toBe("data:image/webp;base64,AAA");
     expect(p?.profile.displayName).toBe("JP again");
+  });
+});
+
+describe("read state", () => {
+  beforeEach(() => { state.hashes.clear(); });
+
+  it("leaves every comment unread for someone who hasn't read anything, however old", async () => {
+    expect(await getSeen("peter")).toEqual({ _floor: 0 });
+  });
+
+  it("remembers how far each thread was read", async () => {
+    await markSeen("jp", "peter:1", 5000);
+    expect((await getSeen("jp"))["peter:1"]).toBe(5000);
+  });
+
+  it("never moves a thread backwards, so a stale device can't un-read it", async () => {
+    await markSeen("jp", "peter:1", 9000);
+    await markSeen("jp", "peter:1", 5000);
+    expect((await getSeen("jp"))["peter:1"]).toBe(9000);
+  });
+
+  it("keeps each person's read state to themselves", async () => {
+    await markSeen("jp", "peter:1", 5000);
+    expect((await getSeen("adam"))["peter:1"]).toBeUndefined();
+  });
+
+  it("raises the floor when everything is marked read, and never lowers it", async () => {
+    const later = 1_800_000_000_000;
+    await markAllSeen("jp", later);
+    await markAllSeen("jp", later - 1000);
+    expect((await getSeen("jp"))._floor).toBe(later);
+  });
+
+  it("reads times that Redis hands back as strings", async () => {
+    state.hashes.set("seen:jp", new Map([["peter:1", "123"]]));
+    expect((await getSeen("jp"))["peter:1"]).toBe(123);
   });
 });

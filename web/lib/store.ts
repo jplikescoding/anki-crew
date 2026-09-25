@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import type { Comment, DayRow, Engagement, FeedItem, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
+import { FLOOR, type SeenMap } from "@/lib/unread";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL!,
@@ -19,6 +20,7 @@ const reactionsKey = (itemId: string) => `reactions:${itemId}`;
 const commentsKey = (itemId: string) => `comments:${itemId}`;
 const daysKey = (id: string) => `user:${id}:days`;
 const metaKey = (id: string) => `user:${id}:meta`;
+const seenKey = (id: string) => `seen:${id}`;
 
 function parse<T>(value: unknown): T {
   return typeof value === "string" ? (JSON.parse(value) as T) : (value as T);
@@ -158,6 +160,42 @@ export async function getEngagement(itemIds: string[]): Promise<Record<string, E
     }
   }
   return out;
+}
+
+/* ------------------------------------------------------------- read state */
+
+/**
+ * How far `userId` has read each thread, plus their floor. There is no starting
+ * cutoff: a comment is unread until its thread is opened, however old it is
+ * and however late you joined. Only Mark all read raises the floor.
+ */
+export async function getSeen(userId: string): Promise<SeenMap> {
+  const raw = (await redis.hgetall<Record<string, unknown>>(seenKey(userId))) ?? {};
+  const out: SeenMap = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const n = Number(v);
+    if (Number.isFinite(n)) out[k] = n;
+  }
+  out[FLOOR] = out[FLOOR] ?? 0;
+  return out;
+}
+
+/**
+ * Read times only go forward. A phone that loaded an hour ago must not undo
+ * what the laptop just read. Read-then-write can race, but only between two of
+ * your own devices inside one request, and whichever wins is still a read.
+ */
+async function raise(userId: string, field: string, at: number): Promise<void> {
+  const cur = Number((await redis.hget(seenKey(userId), field)) ?? 0);
+  if (at > cur) await redis.hset(seenKey(userId), { [field]: at });
+}
+
+export async function markSeen(userId: string, itemId: string, at: number): Promise<void> {
+  await raise(userId, itemId, at);
+}
+
+export async function markAllSeen(userId: string, at: number): Promise<void> {
+  await raise(userId, FLOOR, at);
 }
 
 /* ----------------------------------------------------------------- avatar */
