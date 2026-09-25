@@ -111,6 +111,13 @@ body {
 }
 .card-arrive { animation: card-arrive 900ms cubic-bezier(.22,.8,.3,1) 1; }
 
+/* The unread count ticks as you read; each new number lands with a small pop. */
+@keyframes badge-pop {
+  from { transform: scale(.55); }
+  to   { transform: none; }
+}
+.badge-pop { animation: badge-pop 180ms cubic-bezier(.3,1.5,.5,1) 1; }
+
 @keyframes overtake-sweep {
   0%   { background-position: -120% 0; }
   100% { background-position: 220% 0; }

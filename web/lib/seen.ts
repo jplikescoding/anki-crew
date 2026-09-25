@@ -13,8 +13,6 @@ export type Seen = {
   /** Standings as of your last visit, best first. */
   order: string[];
   at: number;
-  /** When you last opened the feed. Comments after this are new to you. */
-  commentsSeenAt?: number;
 };
 
 export function readSeen(): Seen | null {

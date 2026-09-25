@@ -22,13 +22,17 @@ const card = {
   deck: "Core", ease: 3, ivl: 21, ts: Date.now() - 60_000,
 };
 
-function crew(engagement: Record<string, Engagement> = {}, jpPublishedAt = Date.now()): CrewResponse {
+function crew(
+  engagement: Record<string, Engagement> = {},
+  jpPublishedAt = Date.now(),
+  seen: Record<string, number> = {},
+): CrewResponse {
   return {
     viewer: "jp",
     people: [person("jp", "JP", 10, jpPublishedAt), person("peter", "Peter", 5)],
     feed: [card],
     engagement,
-    seen: {},
+    seen,
   };
 }
 
@@ -76,7 +80,7 @@ describe("keyboard shortcuts", () => {
     const input = screen.getByTestId("comment-input-peter:1");
     const before = crewCalls();
 
-    for (const key of ["r", "1", "3", "w", "?"]) fireEvent.keyDown(input, { key });
+    for (const key of ["r", "1", "3", "w", "?", "n", "g"]) fireEvent.keyDown(input, { key });
 
     expect(crewCalls()).toBe(before);
     expect(screen.getByTestId("comment-input-peter:1")).toBeInTheDocument();
@@ -141,23 +145,58 @@ describe("the overtake chime", () => {
 
 describe("unread comments", () => {
   const banter = { "peter:1": { reactions: {}, comments: [{ user: "peter", text: "nice", at: 5000 }] } };
+  const unreadCrew = () => ok(crew(banter, Date.now(), { _floor: 1000 }));
+  const seenCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/seen"));
 
-  it("clear the badge when you open the feed", async () => {
-    localStorage.setItem(SEEN, JSON.stringify({ totals: {}, order: [], at: 0, commentsSeenAt: 1000 }));
-    crewReplies.push(ok(crew(banter)));
+  it("counts what the server says you haven't read", async () => {
+    crewReplies.push(unreadCrew());
     await mount();
     expect(screen.getByTestId("unread-badge")).toHaveTextContent("1");
-    fireEvent.click(screen.getByRole("button", { name: /^feed/ }));
+  });
+
+  it("don't clear just because you looked at the feed", async () => {
+    crewReplies.push(unreadCrew());
+    await mount();
+    fireEvent.keyDown(window, { key: "2" });
+    expect(screen.getByTestId("unread-badge")).toHaveTextContent("1");
+    expect(seenCalls()).toHaveLength(0);
+  });
+
+  it("clear when you open the thread, and tell the server", async () => {
+    crewReplies.push(unreadCrew());
+    await mount();
+    fireEvent.keyDown(window, { key: "2" });
+    await act(async () => { fireEvent.click(screen.getByTestId("thread-peter:1")); });
+    expect(screen.queryByTestId("unread-badge")).not.toBeInTheDocument();
+    expect(JSON.parse(seenCalls()[0][1].body)).toEqual({ itemId: "peter:1", upTo: 5000 });
+  });
+
+  it("open the Unread filter at the newest thread when you tap the badge", async () => {
+    crewReplies.push(unreadCrew());
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^feed/ })); });
+    expect(screen.getByTestId("filter-unread")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("comment-input-peter:1")).toBeInTheDocument();
+  });
+
+  it("stay read when a refresh returns read state from before you opened it", async () => {
+    crewReplies.push(unreadCrew(), unreadCrew());
+    await mount();
+    fireEvent.keyDown(window, { key: "2" });
+    await act(async () => { fireEvent.click(screen.getByTestId("thread-peter:1")); });
+    await refresh();
     expect(screen.queryByTestId("unread-badge")).not.toBeInTheDocument();
   });
 
-  it("stay read after a refresh", async () => {
-    localStorage.setItem(SEEN, JSON.stringify({ totals: {}, order: [], at: 0, commentsSeenAt: 1000 }));
-    crewReplies.push(ok(crew(banter)), ok(crew(banter)));
+  it("all clear at once with Mark all read", async () => {
+    crewReplies.push(unreadCrew());
     await mount();
-    fireEvent.click(screen.getByRole("button", { name: /^feed/ }));
-    await refresh();
-    expect(JSON.parse(localStorage.getItem(SEEN)!).commentsSeenAt).toBeGreaterThan(5000);
+    fireEvent.keyDown(window, { key: "2" });
+    fireEvent.click(screen.getByTestId("filter-unread"));
+    fireEvent.click(screen.getByTestId("mark-all-read"));
+    await act(async () => { fireEvent.click(screen.getByTestId("mark-all-read")); });
+    expect(screen.queryByTestId("unread-badge")).not.toBeInTheDocument();
+    expect(JSON.parse(seenCalls()[0][1].body)).toEqual({ all: true, upTo: 5000 });
   });
 });
 

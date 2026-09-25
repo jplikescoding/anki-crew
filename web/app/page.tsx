@@ -9,6 +9,7 @@ import { Avatar, AvatarUploader } from "@/app/components/Avatar";
 import { rankBy } from "@/lib/metrics";
 import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
+import { FLOOR, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "you";
@@ -40,10 +41,9 @@ export default function Page() {
   const [problem, setProblem] = useState<string | null>(null);
   const loaded = useRef(false);
   const [apiKey, setApiKey] = useState("");
-  // Frozen for the session so highlights do not vanish while you are reading.
-  const unreadSince = useRef(0);
-  // The badge, unlike the highlights, clears as soon as you open the feed.
-  const [badgeSince, setBadgeSince] = useState(0);
+  // What you've read, per thread. Server copy merged with anything opened
+  // since, so a refresh that raced a save can't un-read it.
+  const [seen, setSeen] = useState<SeenMap>({});
   const chimedFor = useRef<string | null>(null);
 
   // What the previous visit showed, captured once so the roll-up has a floor.
@@ -76,14 +76,8 @@ export default function Page() {
       setData(next);
       loaded.current = true;
       setEngagement(next.engagement ?? {});
-      if (unreadSince.current === 0) {
-        unreadSince.current = before.current?.commentsSeenAt ?? Date.now();
-        setBadgeSince(unreadSince.current);
-      }
+      setSeen((prev) => mergeSeen(prev, next.seen ?? {}));
       writeSeen({
-        // Re-read, not taken from `before`: opening the feed moves this on,
-        // and writing the old value back would mark everything unread again.
-        commentsSeenAt: readSeen()?.commentsSeenAt,
         totals: Object.fromEntries(next.people.map((p) => [p.profile.id, todayReviews(p)])),
         order,
         at: Date.now(),
@@ -161,6 +155,20 @@ export default function Page() {
     send("/api/comment", { itemId, text }, "your comment didn't post");
   }, [data?.viewer, send]);
 
+  /**
+   * Opening a thread reads it, up to the newest comment it showed. Applied
+   * locally first so the badge drops as you tap.
+   */
+  const markSeen = useCallback((itemId: string, upTo: number) => {
+    setSeen((prev) => mergeSeen(prev, { [itemId]: upTo }));
+    send("/api/seen", { itemId, upTo }, "couldn't mark that as read");
+  }, [send]);
+
+  const markAllSeen = useCallback((upTo: number) => {
+    setSeen((prev) => mergeSeen(prev, { [FLOOR]: upTo }));
+    send("/api/seen", { all: true, upTo }, "couldn't mark everything read");
+  }, [send]);
+
   const dismissHint = () => {
     setHint(false);
     try { localStorage.setItem(HINT_KEY, "1"); } catch { /* storage blocked */ }
@@ -186,16 +194,6 @@ export default function Page() {
     return () => window.removeEventListener("keydown", onKey);
   }, [load]);
 
-  // Opening the feed is what clears the badge; the highlights stay put so you
-  // can still see which ones were new.
-  useEffect(() => {
-    if (tab !== "feed") return;
-    const at = Date.now();
-    setBadgeSince(at);
-    const prev = readSeen();
-    if (prev) writeSeen({ ...prev, commentsSeenAt: at });
-  }, [tab]);
-
   if (error) {
     return (
       <main className="mx-auto max-w-md px-6 py-24 text-center">
@@ -212,9 +210,7 @@ export default function Page() {
   }
 
   const selected = data.people.find((p) => p.profile.id === (who ?? data.viewer)) ?? data.people[0];
-  const unreadComments = Object.values(engagement).reduce(
-    (n, e) => n + e.comments.filter((c) => c.at > badgeSince && c.user !== data.viewer).length,
-    0);
+  const unreadComments = unreadCount(engagement, data.viewer, seen);
   const me = data.people.find((p) => p.profile.id === data.viewer);
   const gained = me ? todayReviews(me) - (before.current?.totals[me.profile.id] ?? todayReviews(me)) : 0;
   const seenTotals = before.current?.totals;
@@ -258,9 +254,10 @@ export default function Page() {
                 {t}
                 {t === "feed" && unreadComments > 0 && (
                   <span
+                    key={unreadComments}
                     data-testid="unread-badge"
-                    title={unreadComments + " new — opens at the first one"}
-                    className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                    title={`${unreadComments} unread — tap to go through them`}
+                    className="badge-pop absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold"
                     style={{ background: "var(--cyan)", color: "#04121A" }}
                   >
                     {unreadComments}
@@ -343,7 +340,9 @@ export default function Page() {
           apiKey={apiKey}
           onReact={react}
           onComment={comment}
-          seen={{ _floor: unreadSince.current }}
+          seen={seen}
+          onSeen={markSeen}
+          onMarkAllSeen={markAllSeen}
           jumpSignal={jumpSignal}
         />
       )}
@@ -425,7 +424,7 @@ export default function Page() {
           <div className="pane w-full max-w-xs px-5 py-4" style={{ background: "#12172A" }} onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-3 text-[13px] font-semibold">Shortcuts</h2>
             <dl className="space-y-1.5 text-[12px]" style={{ color: "var(--ink-dim)" }}>
-              {[["1 2 3", "Board, Feed, You"], ["t w a", "Today, week, all time"], ["r", "Refresh"], ["?", "This list"]].map(
+              {[["1 2 3", "Board, Feed, You"], ["t w a", "Today, week, all time"], ["n", "Next unread comment"], ["g", "Back to top"], ["r", "Refresh"], ["?", "This list"]].map(
                 ([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <dt><kbd className="rounded px-1.5 py-0.5" style={{ background: "var(--pane-lift)", color: "var(--ink)" }}>{k}</kbd></dt>
