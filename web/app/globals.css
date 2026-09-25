@@ -83,6 +83,10 @@ body {
 /* A row that scrolls sideways on a phone shouldn't show a scrollbar doing it. */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+/* ...so its edges fade instead, which says there is more to swipe to. */
+.fade-edges {
+  mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 28px), transparent);
+}
 
 /* A metric you can ask about. The dotted rule is the affordance. */
 .defined {
@@ -113,10 +117,10 @@ body {
 
 /* The unread count ticks as you read; each new number lands with a small pop. */
 @keyframes badge-pop {
-  from { transform: scale(.55); }
-  to   { transform: none; }
+  from { transform: scale(.55); box-shadow: 0 0 0 0 rgba(34,211,238,.55); }
+  to   { transform: none; box-shadow: 0 0 0 6px rgba(34,211,238,0); }
 }
-.badge-pop { animation: badge-pop 180ms cubic-bezier(.3,1.5,.5,1) 1; }
+.badge-pop { animation: badge-pop 200ms cubic-bezier(.3,1.5,.5,1) 1; }
 
 @keyframes overtake-sweep {
   0%   { background-position: -120% 0; }

@@ -11,6 +11,9 @@ const OUTCOMES: [Outcome, string, string][] = [
   ["got", "Got it", "var(--jade)"],
 ];
 
+// Inline styles set the resting look, so hover has to outrank them.
+const OFF_HOVER = " hover:bg-(--pane)! hover:text-(--ink)!";
+
 function Toggle({ testid, on, onClick, children }: {
   testid: string; on: boolean; onClick: () => void; children: ReactNode;
 }) {
@@ -19,7 +22,7 @@ function Toggle({ testid, on, onClick, children }: {
       data-testid={testid}
       aria-pressed={on}
       onClick={onClick}
-      className="inline-flex min-h-8 shrink-0 items-center rounded-full border px-3 text-[11.5px] transition-colors duration-150"
+      className={`inline-flex min-h-8 shrink-0 items-center rounded-full border px-3 text-[11.5px] transition duration-150 active:scale-[.96]${on ? "" : OFF_HOVER}`}
       style={{
         borderColor: on ? "var(--edge-lit)" : "var(--edge)",
         background: on ? "var(--pane-lift)" : "transparent",
@@ -51,7 +54,7 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
       className="sticky top-0 z-30 border-b backdrop-blur-md"
       style={{ background: "rgba(7,9,18,.74)", borderColor: "var(--edge)" }}
     >
-      <div className="no-scrollbar flex items-center gap-2 overflow-x-auto px-4 py-2.5">
+      <div className="no-scrollbar fade-edges flex items-center gap-2 overflow-x-auto px-4 py-2.5">
         {people.map((p) => {
           const on = filter.person === p.profile.id;
           return (
@@ -60,7 +63,7 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
               data-testid={`chip-${p.profile.id}`}
               aria-pressed={on}
               onClick={() => set({ person: on ? null : p.profile.id })}
-              className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11.5px] transition-colors duration-150"
+              className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11.5px] transition duration-150 active:scale-[.96]${on ? "" : OFF_HOVER}`}
               style={{
                 borderColor: on ? "var(--edge-lit)" : "var(--edge)",
                 background: on ? "var(--pane-lift)" : "transparent",
@@ -85,7 +88,7 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
                 data-testid={`outcome-${value}`}
                 aria-pressed={on}
                 onClick={() => set({ outcome: value })}
-                className="min-h-8 rounded-full px-2.5 text-[11.5px] transition-colors duration-150"
+                className={`min-h-8 rounded-full px-2.5 text-[11.5px] transition-colors duration-150${on ? "" : " hover:text-(--ink-dim)!"}`}
                 style={{
                   background: on ? "var(--pane-lift)" : "transparent",
                   color: on ? color : "var(--ink-faint)",

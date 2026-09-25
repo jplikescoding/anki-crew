@@ -28,8 +28,10 @@ export default function BackToTop() {
       aria-hidden={!show}
       tabIndex={show ? 0 : -1}
       onClick={scrollToTop}
-      className="fixed bottom-5 right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border text-[16px] backdrop-blur-md transition-all duration-200"
+      className="fixed right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border text-[16px] shadow-[0_8px_24px_rgba(0,0,0,.4)] backdrop-blur-md transition duration-200 hover:bg-[rgba(28,34,58,.9)]! active:scale-95"
       style={{
+        // Clear of the home indicator on phones that have one.
+        bottom: "max(1.25rem, calc(env(safe-area-inset-bottom) + .75rem))",
         borderColor: "var(--edge-lit)",
         background: "rgba(18,23,42,.78)",
         color: "var(--ink)",

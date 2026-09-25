@@ -254,8 +254,8 @@ export default function Feed({
           {groups.map((g) => (
             <section key={g.key} data-testid={`day-${g.key}`}>
               <h3
-                className="flex items-baseline gap-1.5 px-1.5 pb-2 pt-4 text-[10.5px] font-semibold uppercase tracking-[.09em]"
-                style={{ color: "var(--ink-faint)" }}
+                className="flex items-baseline gap-1.5 px-1.5 pb-2 pt-5 text-[11.5px] font-semibold tracking-[.01em]"
+                style={{ color: "var(--ink-dim)" }}
               >
                 <span data-testid="day-label">{g.label}</span>
                 <span className="font-normal tabular-nums" style={{ color: "var(--ink-ghost)" }}>· {g.count}</span>
@@ -289,10 +289,10 @@ export default function Feed({
                       <button
                         data-testid="next-unread"
                         onClick={() => goTo(nextUnread)}
-                        className="mt-2.5 inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-[11.5px] transition-colors duration-150"
+                        className="group mt-2.5 inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-[11.5px] transition duration-150 hover:bg-[rgba(34,211,238,.12)]! active:scale-[.97]"
                         style={{ borderColor: "rgba(34,211,238,.3)", background: "rgba(34,211,238,.06)", color: "var(--cyan-soft)" }}
                       >
-                        Next unread <span aria-hidden>→</span>
+                        Next unread <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
                       </button>
                     ) : undefined}
                   />
@@ -304,7 +304,7 @@ export default function Feed({
             <button
               data-testid="show-more"
               onClick={() => setLimit((l) => l + PAGE)}
-              className="pane mt-3 min-h-10 w-full text-[12px] transition-colors duration-150 hover:bg-[var(--pane-lift)]"
+              className="pane mt-3 min-h-10 w-full text-[12px] tabular-nums transition duration-150 hover:bg-[var(--pane-lift)] active:scale-[.99]"
               style={{ color: "var(--ink-dim)" }}
             >
               Show {Math.min(PAGE, shown.length - limit)} more · {shown.length - limit} left
