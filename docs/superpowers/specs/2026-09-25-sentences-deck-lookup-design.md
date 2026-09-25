@@ -231,13 +231,9 @@ A **Sentences** toggle button in the filter row, off by default, stored in
 
 ### 5.5 What's new
 
-One note at the top of `NOTES`:
-- cards show the real word and meaning;
-- the Sentences switch and the 例 button;
-- the deck badge;
-- "update your publisher (`git pull`) to get badges on your friends' cards".
-
-It's written briefly and colloquially.
+One note at the top of `NOTES`, as a single short blurb (one item, a sentence
+or two, not a list). It covers the real word and meaning on cards,
+sentences, the deck badge, and "git pull your publisher to get badges".
 
 ## 6. Rollout
 
