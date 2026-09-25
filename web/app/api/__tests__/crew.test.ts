@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { PersonView } from "@/lib/types";
 
 const person: PersonView = {
@@ -47,5 +47,16 @@ describe("GET /api/crew", () => {
     const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
     expect((await res.json()).seen).toEqual({ _floor: 42, "peter:1": 7 });
     expect(getSeen).toHaveBeenCalledWith("jp");
+  });
+
+  describe("each person's day", () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    it("moves on to today for someone who hasn't synced since yesterday", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.UTC(2026, 8, 22, 15)); // 11am in New York
+      const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
+      expect((await res.json()).people[0].meta.todayKey).toBe("2026-09-22");
+    });
   });
 });

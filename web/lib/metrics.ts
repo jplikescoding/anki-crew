@@ -62,29 +62,63 @@ function reviewsOn(person: PersonView, date: string): number {
   return person.days.find((d) => d.date === date)?.reviews ?? 0;
 }
 
-/** Position of each person on one day, 1-based, ties broken by name so it never jitters. */
-function ranksOn(people: PersonView[], date: string): Record<string, number> {
-  const order = rankBy(people, (p) => reviewsOn(p, date));
+export type Range = "today" | "week" | "all";
+
+/**
+ * A person's score for a range, as of `back` days before their own today.
+ * `back` is 1 for "as of yesterday": the week ending yesterday, or the total
+ * before today.
+ */
+function scoreAsOf(person: PersonView, range: Range, back: number): number {
+  const end = shiftDays(person.meta.todayKey, -back);
+  if (range === "today") return reviewsOn(person, end);
+  const from = range === "week" ? weekStart(end) : "";
+  return totals(person.days.filter((d) => d.date >= from && d.date <= end)).reviews;
+}
+
+/** Position of each person, 1-based, ties broken by name so it never jitters. */
+function ranksAsOf(people: PersonView[], range: Range, back: number): Record<string, number> {
+  const order = rankBy(people, (p) => scoreAsOf(p, range, back));
   const out: Record<string, number> = {};
   order.forEach((p, i) => { out[p.profile.id] = i + 1; });
   return out;
 }
 
 /**
- * How many places each person moved since yesterday. Positive means they climbed.
- * With no yesterday to compare against, everyone reads as unmoved rather than as
+ * How many places each person moved since yesterday, on the range the board is
+ * showing. Positive means they climbed. Everyone is measured on their own day,
+ * so a crewmate in another zone isn't compared on the wrong date. With no
+ * yesterday to compare against, everyone reads as unmoved rather than as
  * having climbed from nowhere.
  */
-export function rankDeltas(people: PersonView[], todayKey: string): Record<string, number> {
-  const yesterday = shiftDays(todayKey, -1);
-  const noHistory = people.every((p) => reviewsOn(p, yesterday) === 0);
-  const before = ranksOn(people, yesterday);
-  const now = ranksOn(people, todayKey);
+export function rankDeltas(people: PersonView[], range: Range): Record<string, number> {
+  const noHistory = people.every((p) => scoreAsOf(p, range, 1) === 0);
+  const before = ranksAsOf(people, range, 1);
+  const now = ranksAsOf(people, range, 0);
   const out: Record<string, number> = {};
   for (const p of people) {
     out[p.profile.id] = noHistory ? 0 : before[p.profile.id] - now[p.profile.id];
   }
   return out;
+}
+
+/**
+ * The Anki day it is right now for someone, from their zone and Anki's default
+ * 4am rollover. A publisher only reports its day when it syncs, so without this
+ * last night's cards would still count as "today" until they next study.
+ * Never earlier than the reported day, and the reported day stands when the
+ * zone isn't a real one (setup writes "local" when left blank).
+ */
+export function currentDayKey(tz: string, reported: string, now: number): string {
+  let local: string;
+  try {
+    local = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(now - 4 * 3600_000));
+  } catch {
+    return reported;
+  }
+  return local > reported ? local : reported;
 }
 
 export type Gap =
