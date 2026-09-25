@@ -53,12 +53,29 @@ vi.mock("@upstash/redis", () => ({
       const l = state.lists.get(key) ?? [];
       return l.slice(start, stop === -1 ? undefined : stop + 1);
     }
+    async del(key: string) { state.hashes.delete(key); state.strings.delete(key); }
+    async exists(key: string) { return state.hashes.has(key) || state.strings.has(key) ? 1 : 0; }
+    async hmget(key: string, ...fields: string[]) {
+      const h = state.hashes.get(key);
+      if (!h) return null;
+      return Object.fromEntries(fields.map((f) => [f, h.get(f) ?? null]));
+    }
+    multi() {
+      const ops: (() => Promise<unknown>)[] = [];
+      const tx = {
+        del: (k: string) => { ops.push(() => this.del(k)); return tx; },
+        hset: (k: string, e: Record<string, string>) => { ops.push(() => this.hset(k, e)); return tx; },
+        exec: async () => { for (const op of ops) await op(); return []; },
+      };
+      return tx;
+    }
   },
 }));
 
 import {
   saveSnapshot, listUsers, getPerson, getFeed, markEngaged, setReaction, addComment,
   getEngagement, setAvatar, getSeen, markSeen, markAllSeen, FEED_CAP, COMMENT_CAP,
+  getNoteTypes, getWordStatuses, getFieldMaps, setFieldMap,
 } from "@/lib/store";
 import type { IngestBody, FeedItem } from "@/lib/types";
 
@@ -168,6 +185,47 @@ describe("store", () => {
     await saveSnapshot(body({ recentCards: many }));
     const ids = (await getFeed(FEED_CAP + 50)).map((f) => f.id);
     expect(ids).toContain("jp:0");
+  });
+
+  it("keeps note types and replaces the word index wholesale", async () => {
+    await saveSnapshot(body({ noteTypes: { T: ["Expression", "Meaning"] },
+      words: { known: ["話す"], learning: ["聞く"], new: [] } }));
+    expect(await getNoteTypes("jp")).toEqual({ T: ["Expression", "Meaning"] });
+    expect(await getWordStatuses("jp", ["話す", "聞く", "見る"])).toEqual({ 話す: "known", 聞く: "learning" });
+
+    await saveSnapshot(body({ words: { known: [], learning: [], new: ["見る"] } }));
+    expect(await getWordStatuses("jp", ["話す", "見る"])).toEqual({ 見る: "new" });
+  });
+
+  it("leaves the word index alone when a publish leaves it out", async () => {
+    await saveSnapshot(body({ words: { known: ["話す"], learning: [], new: [] } }));
+    await saveSnapshot(body());
+    expect(await getWordStatuses("jp", ["話す"])).toEqual({ 話す: "known" });
+  });
+
+  it("tells no index apart from no matches", async () => {
+    expect(await getWordStatuses("jp", ["話す"])).toBeNull();
+    await saveSnapshot(body({ words: { known: [], learning: [], new: [] } }));
+    // An empty index is still no index: nothing to compare against.
+    expect(await getWordStatuses("jp", ["話す"])).toBeNull();
+    await saveSnapshot(body({ words: { known: ["聞く"], learning: [], new: [] } }));
+    expect(await getWordStatuses("jp", ["話す"])).toEqual({});
+  });
+
+  it("saves, merges and resets field maps per note type", async () => {
+    expect(await getFieldMaps("jp")).toEqual({});
+    await setFieldMap("jp", "A", { word: "Front" });
+    expect(await setFieldMap("jp", "B", { meaning: "Back" })).toEqual({ A: { word: "Front" }, B: { meaning: "Back" } });
+    expect(await setFieldMap("jp", "A", {})).toEqual({ B: { meaning: "Back" } });
+  });
+
+  it("keeps the copy of a card that has fields over an older copy without", async () => {
+    // Both are stored under one id and score after someone updates their publisher.
+    const bare = card("jp:1", 100);
+    const fielded = { ...bare, noteType: "T", fields: { Expression: "話す" } };
+    await saveSnapshot(body({ recentCards: [bare] }));
+    await saveSnapshot(body({ recentCards: [fielded] }));
+    expect((await getFeed()).find((i) => i.id === "jp:1")?.fields).toEqual({ Expression: "話す" });
   });
 });
 

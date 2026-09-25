@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import type { Comment, DayRow, Engagement, FeedItem, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
+import type { Comment, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
 import { FLOOR, type SeenMap } from "@/lib/unread";
 
 const redis = new Redis({
@@ -21,6 +21,9 @@ const commentsKey = (itemId: string) => `comments:${itemId}`;
 const daysKey = (id: string) => `user:${id}:days`;
 const metaKey = (id: string) => `user:${id}:meta`;
 const seenKey = (id: string) => `seen:${id}`;
+const noteTypesKey = (id: string) => `user:${id}:notetypes`;
+const wordsKey = (id: string) => `user:${id}:words`;
+const fieldMapKey = (id: string) => `user:${id}:fieldmap`;
 
 function parse<T>(value: unknown): T {
   return typeof value === "string" ? (JSON.parse(value) as T) : (value as T);
@@ -63,6 +66,22 @@ export async function saveSnapshot(body: IngestBody): Promise<void> {
     );
     await redis.zadd(FEED, first, ...rest);
     await trimFeed();
+  }
+
+  if (body.noteTypes) await redis.set(noteTypesKey(id), JSON.stringify(body.noteTypes));
+
+  // Replaced in one transaction so a lookup never sees half an old index.
+  // Left alone when the publisher skipped an unchanged one.
+  if (body.words) {
+    const entries: Record<string, DeckStatus> = {};
+    // Best status last, so it wins if a word somehow appears twice.
+    for (const status of ["new", "learning", "known"] as const) {
+      for (const w of body.words[status]) entries[w] = status;
+    }
+    const tx = redis.multi();
+    tx.del(wordsKey(id));
+    if (Object.keys(entries).length > 0) tx.hset(wordsKey(id), entries);
+    await tx.exec();
   }
 }
 
@@ -108,12 +127,16 @@ export async function getFeed(limit = FEED_CAP): Promise<FeedItem[]> {
   const raw = await redis.zrange<string[]>(FEED, 0, limit - 1, { rev: true });
   // The whole serialized item is the ZSET member, so a card republished with
   // changed content (a fixed typo, a moved deck, a "Set Due Date" that alters
-  // ivl) is stored twice under one id. Descending score means the first
-  // occurrence of an id is the newest, so later ones are dropped.
+  // ivl, or a publisher upgrade that adds fields) is stored twice under one
+  // id. Descending score means the first occurrence of an id is the newest,
+  // but a later, older copy with fields still beats an earlier one without.
   const byId = new Map<string, FeedItem>();
   for (const r of raw) {
     const item = parse<FeedItem>(r);
-    if (!byId.has(item.id)) byId.set(item.id, item);
+    const kept = byId.get(item.id);
+    // After a publisher update the same card is stored twice, once with named
+    // fields. The richer copy wins whatever order Redis returns them in.
+    if (!kept || (!kept.fields && item.fields)) byId.set(item.id, item);
   }
   return [...byId.values()];
 }
@@ -206,4 +229,39 @@ export async function setAvatar(userId: string, avatar: string): Promise<boolean
   const profile = parse<Profile>(raw);
   await redis.set(profileKey(userId), JSON.stringify({ ...profile, avatar }));
   return true;
+}
+
+/* ------------------------------------------------------ fields and words */
+
+export async function getNoteTypes(id: string): Promise<Record<string, string[]>> {
+  const raw = await redis.get(noteTypesKey(id));
+  return raw ? parse<Record<string, string[]>>(raw) : {};
+}
+
+/**
+ * Which of `words` are in this person's decks, and at what stage. Null when
+ * they have no index at all (not updated yet), so the caller can show no
+ * badge rather than "not in your deck" everywhere.
+ */
+export async function getWordStatuses(id: string, words: string[]): Promise<Record<string, DeckStatus> | null> {
+  if ((await redis.exists(wordsKey(id))) === 0) return null;
+  if (words.length === 0) return {};
+  const got = (await redis.hmget<Record<string, unknown>>(wordsKey(id), ...words)) ?? {};
+  const out: Record<string, DeckStatus> = {};
+  for (const [w, s] of Object.entries(got)) {
+    if (s === "known" || s === "learning" || s === "new") out[w] = s;
+  }
+  return out;
+}
+
+export async function getFieldMaps(id: string): Promise<FieldMaps> {
+  const raw = await redis.get(fieldMapKey(id));
+  return raw ? parse<FieldMaps>(raw) : {};
+}
+
+export async function setFieldMap(id: string, noteType: string, map: FieldMap): Promise<FieldMaps> {
+  const all = await getFieldMaps(id);
+  if (Object.keys(map).length === 0) delete all[noteType]; else all[noteType] = map;
+  await redis.set(fieldMapKey(id), JSON.stringify(all));
+  return all;
 }
