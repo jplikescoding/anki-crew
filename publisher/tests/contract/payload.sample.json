@@ -28,7 +28,14 @@
       "deck": "Core 2k/6k",
       "ease": 3,
       "ivl": 21,
-      "ts": 1758412345678
+      "ts": 1758412345678,
+      "noteType": "Japanese Vocab Dynamic",
+      "fields": {
+        "Expression": "話しかける",
+        "Meaning": "to speak to, to address",
+        "Sentence": "友達に<b>話しかける</b>。",
+        "Sentence-English": "I speak to a friend."
+      }
     }
   ]
 }

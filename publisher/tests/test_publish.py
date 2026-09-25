@@ -1,7 +1,7 @@
 import io, json, os, tempfile, unittest
 from datetime import datetime
 from unittest import mock
-from tests.fixtures import build_db, add_deck, add_note, add_card, add_review, set_config, ms
+from tests.fixtures import build_db, add_deck, add_note, add_card, add_review, add_notetype, set_config, ms
 import publish as P
 
 CONTRACT = os.path.join(os.path.dirname(__file__), "contract", "payload.sample.json")
@@ -11,6 +11,7 @@ def _seeded():
     con = build_db(os.path.join(tempfile.mkdtemp(), "c.anki2"))
     set_config(con, "rollover", 4)
     add_deck(con, 5, "Core 2k/6k")
+    add_notetype(con, 1, "Japanese Vocab Dynamic", ["Expression", "Meaning"])
     add_note(con, 100, 1, ["話す", "to speak"])
     add_card(con, 200, 100, 5, ivl=21)
     add_review(con, ms(datetime(2026, 9, 21, 10, 0)), 200, ease=3, time_ms=30000)

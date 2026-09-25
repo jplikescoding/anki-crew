@@ -1,7 +1,8 @@
 import os, tempfile, unittest
 from datetime import datetime
-from tests.fixtures import build_db, add_deck, add_note, add_card, add_review, ms, SEP
+from tests.fixtures import build_db, add_deck, add_note, add_card, add_review, add_notetype, ms, SEP
 import feed as F
+import anki_reader
 
 DECKS = {5: "Core 2k/6k"}
 
@@ -62,7 +63,8 @@ class TestFeedItems(unittest.TestCase):
         item = F.feed_items(con, DECKS, "jp")[0]
         self.assertEqual(item, {"id": "jp:%d" % rid, "user": "jp",
                                 "front": "話す", "back": "to speak",
-                                "deck": "Core 2k/6k", "ease": 3, "ivl": 21, "ts": rid})
+                                "deck": "Core 2k/6k", "ease": 3, "ivl": 21, "ts": rid,
+                                "noteType": "", "fields": {}})
 
     def test_id_is_deterministic_across_runs(self):
         con = _seeded()
@@ -114,6 +116,80 @@ class TestFeedItems(unittest.TestCase):
             add_card(con, 200 + i, 100 + i, 5)
             add_review(con, ms(datetime(2026, 9, 21, 10, i)), 200 + i)
         self.assertEqual(len(F.feed_items(con, DECKS, "jp", limit=2)), 2)
+
+
+VOCAB = ["Expression", "Meaning", "Reading", "Audio", "Sentence",
+         "Sentence-Kana", "Sentence-English", "Sentence Audio", "Image_URI"]
+
+
+class TestCleanRich(unittest.TestCase):
+    def test_keeps_bold_and_strips_everything_else(self):
+        self.assertEqual(F.clean_rich('<font color="#008000"><b>金曜日</b>の夜</font>'),
+                         "<b>金曜日</b>の夜")
+
+    def test_keeps_bold_case_insensitively(self):
+        self.assertEqual(F.clean_rich("<B>話す</B>"), "<b>話す</b>")
+
+    def test_strips_sound_and_unescapes(self):
+        self.assertEqual(F.clean_rich("a &amp; b[sound:x.mp3]"), "a & b")
+
+
+class TestNoteFields(unittest.TestCase):
+    def test_names_each_value_and_drops_empty_audio_and_image_fields(self):
+        flds = SEP.join(["<b>金曜日</b>", "Friday", "きんようび", "[sound:a.mp3]",
+                         "<b>金曜日</b>の夜は出かけます。", "", "I go out on Friday night.",
+                         "[sound:b.mp3]", '<img src="x.jpg" />'])
+        self.assertEqual(F.note_fields(flds, VOCAB), {
+            "Expression": "<b>金曜日</b>", "Meaning": "Friday", "Reading": "きんようび",
+            "Sentence": "<b>金曜日</b>の夜は出かけます。",
+            "Sentence-English": "I go out on Friday night.",
+        })
+
+    def test_a_field_that_is_only_bold_tags_counts_as_empty(self):
+        self.assertEqual(F.note_fields(SEP.join(["<b></b>", "x"]), ["A", "B"]), {"B": "x"})
+
+    def test_caps_each_value(self):
+        out = F.note_fields("y" * 500, ["A"])
+        self.assertEqual(len(out["A"]), F.MAX_FIELD_LEN)
+
+    def test_sends_at_most_thirty_non_empty_fields(self):
+        names = ["F%d" % i for i in range(40)]
+        out = F.note_fields(SEP.join("v%d" % i for i in range(40)), names)
+        self.assertEqual(list(out), names[:F.MAX_FIELDS])
+
+    def test_values_without_a_name_are_dropped(self):
+        self.assertEqual(F.note_fields(SEP.join(["a", "b"]), ["A"]), {"A": "a"})
+
+
+class TestReaderNames(unittest.TestCase):
+    def test_note_type_and_field_names_in_order(self):
+        con = _seeded()
+        add_notetype(con, 7, "Japanese Vocab Dynamic", VOCAB)
+        self.assertEqual(anki_reader.notetype_names(con), {7: "Japanese Vocab Dynamic"})
+        self.assertEqual(anki_reader.field_names(con), {7: VOCAB})
+
+
+class TestFeedItemFields(unittest.TestCase):
+    def test_items_carry_note_type_and_named_fields(self):
+        con = _seeded()
+        add_notetype(con, 7, "Japanese Vocab Dynamic", VOCAB)
+        add_note(con, 100, 7, ["金曜日", "Friday", "", "", "金曜日の夜", "", "", "", ""])
+        add_card(con, 200, 100, 5)
+        add_review(con, ms(datetime(2026, 9, 21, 10, 0)), 200)
+        item = F.feed_items(con, DECKS, "jp")[0]
+        self.assertEqual(item["noteType"], "Japanese Vocab Dynamic")
+        self.assertEqual(item["fields"], {"Expression": "金曜日", "Meaning": "Friday",
+                                          "Sentence": "金曜日の夜"})
+        # Old dashboards still read these.
+        self.assertEqual((item["front"], item["back"]), ("金曜日", "Friday"))
+
+    def test_unknown_note_type_gets_an_empty_name_and_no_fields(self):
+        con = _seeded()
+        add_note(con, 100, 99, ["話す", "to speak"])
+        add_card(con, 200, 100, 5)
+        add_review(con, ms(datetime(2026, 9, 21, 10, 0)), 200)
+        item = F.feed_items(con, DECKS, "jp")[0]
+        self.assertEqual((item["noteType"], item["fields"]), ("", {}))
 
 
 if __name__ == "__main__":

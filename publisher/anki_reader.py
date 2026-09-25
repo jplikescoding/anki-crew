@@ -78,3 +78,17 @@ def deck_names(con):
     """Deck id -> display name, with schema 18's \\x1f nesting separator normalised."""
     return {int(did): name.replace("\x1f", "::")
             for did, name in con.execute("SELECT id, name FROM decks")}
+
+
+def notetype_names(con):
+    """Note type id -> name."""
+    return {int(ntid): name for ntid, name in con.execute("SELECT id, name FROM notetypes")}
+
+
+def field_names(con):
+    """Note type id -> its field names in order. Ordered by integers only:
+    Anki's text columns use a collation plain sqlite3 doesn't have."""
+    out = {}
+    for ntid, _ord, name in con.execute("SELECT ntid, ord, name FROM fields ORDER BY ntid, ord"):
+        out.setdefault(int(ntid), []).append(name)
+    return out

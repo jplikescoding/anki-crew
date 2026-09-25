@@ -73,3 +73,10 @@ def add_review(con, rid_ms, cid, ease=3, rtype=1, time_ms=5000, ivl=1):
         "INSERT INTO revlog(id, cid, ease, ivl, time, type) VALUES (?, ?, ?, ?, ?, ?)",
         (rid_ms, cid, ease, ivl, time_ms, rtype))
     con.commit()
+
+
+def add_notetype(con, ntid, name, field_names):
+    con.execute("INSERT INTO notetypes(id, name) VALUES (?, ?)", (ntid, name))
+    for i, field in enumerate(field_names):
+        con.execute("INSERT INTO fields(ntid, ord, name) VALUES (?, ?, ?)", (ntid, i, field))
+    con.commit()
