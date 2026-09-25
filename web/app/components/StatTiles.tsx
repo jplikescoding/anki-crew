@@ -5,7 +5,7 @@ import { StatTile } from "@/app/components/primitives";
 
 function prettyDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
-    day: "numeric", month: "short", timeZone: "UTC",
+    day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
   });
 }
 

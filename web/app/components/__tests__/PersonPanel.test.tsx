@@ -43,4 +43,11 @@ describe("PersonPanel", () => {
     expect(screen.getByText("話す")).toBeTruthy();
     expect(screen.queryByText("聞く")).toBeNull();
   });
+
+  it("shows their best day with the year", () => {
+    render(<PersonPanel person={person} items={[]} />);
+    expect(screen.getByTestId("best-day").textContent).toBe("100");
+    expect(screen.getByText("Sep 20, 2026")).toBeTruthy();
+    expect(screen.getByText(/best 100 on Sep 20, 2026/)).toBeTruthy();
+  });
 });

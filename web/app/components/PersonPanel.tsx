@@ -3,9 +3,9 @@ import { deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/me
 import type { FeedItem, PersonView } from "@/lib/types";
 import { StatTile, StreakStar } from "@/app/components/primitives";
 
-function prettyDate(iso: string) {
+function prettyDate(iso: string, withYear = false) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
-    day: "numeric", month: "short", timeZone: "UTC",
+    day: "numeric", month: "short", year: withYear ? "numeric" : undefined, timeZone: "UTC",
   });
 }
 
@@ -17,6 +17,7 @@ export default function PersonPanel({ person, items }: { person: PersonView; ite
   });
   const peak = Math.max(1, ...window30.map((d) => d.reviews));
   const best = personalBest(person.days);
+  const bestRow = best ? byDate.get(best.date) : undefined;
   const sums = totals(person.days);
   const ret = retention(person.days);
   const mine = items.filter((i) => i.user === person.profile.id).slice(0, 20);
@@ -29,7 +30,7 @@ export default function PersonPanel({ person, items }: { person: PersonView; ite
         <span className="text-[10.5px]" style={{ color: "var(--ink-faint)" }}>{person.profile.tz}</span>
       </header>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <StatTile
           label="All time"
           numeric={person.meta.allTimeReviews}
@@ -65,6 +66,20 @@ export default function PersonPanel({ person, items }: { person: PersonView; ite
         >
           <StreakStar streak={person.meta.streak} />
         </StatTile>
+        {/* Wide, so the date has room for its year on a phone. */}
+        <div className="col-span-2 grid">
+          <StatTile
+            label="Best day"
+            sub={best ? prettyDate(best.date, true) : "no sessions yet"}
+            more={bestRow ? `${Math.round(bestRow.minutes)} min · ${bestRow.newCards} new` : undefined}
+            tint="var(--violet-soft)"
+            glow="rgba(124,58,237,.20)"
+            delay={540}
+            help="The most cards they have ever reviewed in a single day."
+          >
+            <span data-testid="best-day">{best ? best.reviews.toLocaleString() : "—"}</span>
+          </StatTile>
+        </div>
       </div>
 
       <div className="pane mt-2.5 px-4 pb-3 pt-3">
@@ -72,7 +87,7 @@ export default function PersonPanel({ person, items }: { person: PersonView; ite
           <span style={{ color: "var(--ink-dim)" }}>Last 30 days</span>
           {best && (
             <span style={{ color: "var(--ink-faint)" }}>
-              best {best.reviews.toLocaleString()} on {prettyDate(best.date)}
+              best {best.reviews.toLocaleString()} on {prettyDate(best.date, true)}
             </span>
           )}
         </div>
