@@ -358,6 +358,8 @@ export default function Page() {
           onSeen={markSeen}
           onMarkAllSeen={markAllSeen}
           jumpSignal={jumpSignal}
+          fieldMaps={data.fieldMaps}
+          inMyDeck={data.inMyDeck}
         />
       )}
 
@@ -411,7 +413,7 @@ export default function Page() {
               />
             )}
           </div>
-          <PersonPanel person={selected} items={data.feed} />
+          <PersonPanel person={selected} items={data.feed} fieldMaps={data.fieldMaps?.[selected.profile.id]} />
         </>
       )}
 

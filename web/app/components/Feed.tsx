@@ -7,16 +7,27 @@ import {
   applyFilter, emptyMessage, groupByDay, isFiltered, NO_FILTER, type FeedFilter,
 } from "@/lib/feedView";
 import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
-import type { Engagement, FeedItem, PersonView } from "@/lib/types";
+import { resolveCard } from "@/lib/fields";
+import type { DeckStatus, Engagement, FeedItem, FieldMaps, PersonView } from "@/lib/types";
 
 export { EMOJI, ago } from "@/app/components/FeedCard";
 
 /** Cards rendered per step. Five hundred at once is a scroll, not a feed. */
 export const PAGE = 30;
 
+const SENTENCES_KEY = "anki-crew:sentences";
+
+function readSentences(): boolean {
+  try {
+    return localStorage.getItem(SENTENCES_KEY) === "1";
+  } catch {
+    return false; // storage blocked: off, and just not remembered
+  }
+}
+
 export default function Feed({
   items, people, engagement = {}, viewer, apiKey,
-  onReact, onComment, seen = {}, onSeen, jumpSignal = 0, onMarkAllSeen,
+  onReact, onComment, seen = {}, onSeen, jumpSignal = 0, onMarkAllSeen, fieldMaps, inMyDeck,
 }: {
   items: FeedItem[];
   people: PersonView[];
@@ -33,9 +44,19 @@ export default function Feed({
   jumpSignal?: number;
   /** Mark every comment read up to this time. */
   onMarkAllSeen?: (upTo: number) => void;
+  /** Everyone's field choices, by user id. */
+  fieldMaps?: Record<string, FieldMaps>;
+  /** Friends' cards: is the word in the viewer's decks. */
+  inMyDeck?: Record<string, DeckStatus | "none">;
 }) {
   const [filter, setFilter] = useState<FeedFilter>(NO_FILTER);
   const [limit, setLimit] = useState(PAGE);
+  const [sentences, setSentences] = useState(readSentences);
+  const toggleSentences = () => {
+    const next = !sentences;
+    setSentences(next);
+    try { localStorage.setItem(SENTENCES_KEY, next ? "1" : "0"); } catch { /* not remembered */ }
+  };
   // Every thread that has been unread while the Unread filter is on. Reading
   // one must not pull it out from under you mid-list.
   const [pinned, setPinned] = useState<Set<string>>(new Set());
@@ -198,6 +219,8 @@ export default function Feed({
         filter={filter}
         onChange={changeFilter}
         unreadCount={unread.length}
+        sentences={sentences}
+        onSentences={toggleSentences}
       />
 
       {caughtUp && (
@@ -284,6 +307,9 @@ export default function Feed({
                     onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
                     onSubmit={() => submit(item.id)}
                     onReact={onReact}
+                    card={resolveCard(item, fieldMaps?.[item.user]?.[item.noteType ?? ""])}
+                    deckStatus={inMyDeck?.[item.id]}
+                    sentencesOn={sentences}
                     cardRef={(el) => {
                       if (el) cardRefs.current.set(item.id, el);
                       else cardRefs.current.delete(item.id);

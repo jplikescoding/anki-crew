@@ -38,13 +38,16 @@ function Toggle({ testid, on, onClick, children }: {
  * Pinned under the header so the feed can be re-sliced from anywhere in it,
  * not just from the top.
  */
-export default function FeedFilters({ people, indexOf, filter, onChange, unreadCount }: {
+export default function FeedFilters({ people, indexOf, filter, onChange, unreadCount, sentences, onSentences }: {
   people: PersonView[];
   indexOf: Map<string, number>;
   filter: FeedFilter;
   onChange: (f: FeedFilter) => void;
   /** Threads with something unread. */
   unreadCount: number;
+  /** Sample sentences under every card. */
+  sentences: boolean;
+  onSentences: () => void;
 }) {
   const set = (patch: Partial<FeedFilter>) => onChange({ ...filter, ...patch });
 
@@ -115,6 +118,9 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
               {unreadCount}
             </span>
           )}
+        </Toggle>
+        <Toggle testid="filter-sentences" on={sentences} onClick={onSentences}>
+          <span className="jp">例</span>&nbsp;Sentences
         </Toggle>
       </div>
     </div>

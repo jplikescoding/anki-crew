@@ -50,4 +50,13 @@ describe("PersonPanel", () => {
     expect(screen.getByText("Sep 20, 2026")).toBeTruthy();
     expect(screen.getByText(/best 100 on Sep 20, 2026/)).toBeTruthy();
   });
+
+  it("lists recent cards by their real word, not an index number", () => {
+    const items = [{ id: "jp:9", user: "jp", front: "5493", back: "作り上げる", deck: "Core", ease: 3, ivl: 1, ts: 9,
+      noteType: "Core", fields: { "Core-Index": "5493", "Vocabulary-Kanji": "作り上げる", "Vocabulary-English": "to build up" } }];
+    render(<PersonPanel person={person} items={items} />);
+    expect(screen.getByText("作り上げる")).toBeTruthy();
+    expect(screen.getByText("to build up")).toBeTruthy();
+    expect(screen.queryByText("5493")).toBeNull();
+  });
 });

@@ -1,6 +1,7 @@
 "use client";
 import { deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
-import type { FeedItem, PersonView } from "@/lib/types";
+import { plainText, resolveCard } from "@/lib/fields";
+import type { FeedItem, FieldMaps, PersonView } from "@/lib/types";
 import { StatTile, StreakStar } from "@/app/components/primitives";
 
 function prettyDate(iso: string, withYear = false) {
@@ -9,7 +10,9 @@ function prettyDate(iso: string, withYear = false) {
   });
 }
 
-export default function PersonPanel({ person, items }: { person: PersonView; items: FeedItem[] }) {
+export default function PersonPanel({ person, items, fieldMaps }: {
+  person: PersonView; items: FeedItem[]; fieldMaps?: FieldMaps;
+}) {
   const byDate = new Map(person.days.map((d) => [d.date, d]));
   const window30 = Array.from({ length: 30 }, (_, i) => {
     const date = shiftDays(person.meta.todayKey, i - 29);
@@ -139,12 +142,15 @@ export default function PersonPanel({ person, items }: { person: PersonView; ite
         <div className="pane mt-2.5 px-4 py-3">
           <h3 className="mb-2 text-[10.5px]" style={{ color: "var(--ink-dim)" }}>Recent cards</h3>
           <ul className="space-y-2">
-            {mine.map((item) => (
-              <li key={item.id} className="flex items-baseline gap-3">
-                <span className="jp text-[15px] font-medium">{item.front}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "var(--ink-faint)" }}>{item.back}</span>
-              </li>
-            ))}
+            {mine.map((item) => {
+              const c = resolveCard(item, fieldMaps?.[item.noteType ?? ""]);
+              return (
+                <li key={item.id} className="flex items-baseline gap-3">
+                  <span className="jp text-[15px] font-medium">{plainText(c.word)}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "var(--ink-faint)" }}>{plainText(c.meaning)}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

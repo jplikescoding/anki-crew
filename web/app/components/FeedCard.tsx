@@ -1,7 +1,9 @@
 "use client";
-import type { ReactNode, Ref } from "react";
+import { useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { Avatar } from "@/app/components/Avatar";
-import type { Comment, Engagement, FeedItem, PersonView } from "@/lib/types";
+import { Tooltip } from "@/app/components/primitives";
+import { boldParts, plainText, type Resolved } from "@/lib/fields";
+import type { Comment, DeckStatus, Engagement, FeedItem, PersonView } from "@/lib/types";
 
 export const EMOJI = ["🔥", "💀", "😂", "👏", "🎌"];
 export const MAX_COMMENT_CHARS = 280;
@@ -19,9 +21,22 @@ export function ago(ts: number, now: number): string {
   return `${Math.round(ms / 86400000)}d`;
 }
 
+const DECK_HELP = "Is this word in any of your decks, and how well you know it.";
+const STATUS_LABEL: Record<DeckStatus | "none", string> = {
+  known: "known", learning: "learning", new: "not seen yet", none: "not in your deck",
+};
+const STATUS_STYLE: Record<DeckStatus | "none", CSSProperties> = {
+  known: { color: "var(--jade)", background: "rgba(52,211,153,.12)" },
+  learning: { color: "var(--cyan-soft)", background: "rgba(34,211,238,.12)" },
+  new: { color: "var(--ink-dim)", background: "rgba(255,255,255,.07)" },
+  none: { color: "var(--ink-faint)", boxShadow: "inset 0 0 0 1px var(--edge)" },
+};
+const BLUR: CSSProperties = { color: "transparent", textShadow: "0 0 11px rgba(165,174,196,.85)" };
+
 export default function FeedCard({
   item, byId, indexOf, engagement, viewer, canWrite, now, hidden, onToggleQuiz,
   open, onToggleThread, freshSince, draft, onDraft, onSubmit, onReact, cardRef, footer, arrived,
+  card, deckStatus, sentencesOn,
 }: {
   item: FeedItem;
   byId: Map<string, PersonView>;
@@ -43,7 +58,16 @@ export default function FeedCard({
   footer?: ReactNode;           // under the comment box while open
   /** Just navigated to; glows once. */
   arrived?: boolean;
+  /** Word, meaning and sentence, resolved from the card's fields. */
+  card: Resolved;
+  /** Friends' cards: is the word in your decks. Absent means no badge. */
+  deckStatus?: DeckStatus | "none";
+  /** The feed-wide Sentences switch. */
+  sentencesOn: boolean;
 }) {
+  // This card's 例 button flips the feed-wide switch, for this card only.
+  const [flipped, setFlipped] = useState(false);
+  const showSentence = Boolean(card.sentence) && sentencesOn !== flipped;
   const lapse = item.ease === 1;
   const who = byId.get(item.user);
   const idx = indexOf.get(item.user) ?? 0;
@@ -76,22 +100,30 @@ export default function FeedCard({
           ? <Avatar profile={who.profile} size={26} index={idx} />
           : <span className="w-[26px]" />}
         <span className="min-w-0 flex-1">
-          <span className="jp block text-[19px] font-medium leading-snug">{item.front}</span>
-          {item.back && (
+          <span className="jp block text-[19px] font-medium leading-snug">{plainText(card.word)}</span>
+          {card.meaning && (
             <span
               className="mt-[3px] block text-[13px]"
-              style={{
-                color: hidden ? "transparent" : "var(--ink-dim)",
-                textShadow: hidden ? "0 0 11px rgba(165,174,196,.85)" : "none",
-              }}
+              style={hidden ? BLUR : { color: "var(--ink-dim)" }}
             >
-              {item.back}
+              {plainText(card.meaning)}
             </span>
           )}
           <span className="mt-1.5 block text-[10px]" style={{ color: "var(--ink-ghost)" }}>
             {who?.profile.displayName ?? item.user}
             {' · '}
             <span>{item.deck}</span>
+            {deckStatus && (
+              <>
+                {' · '}
+                <Tooltip label={DECK_HELP}>
+                  <span data-testid={`deck-status-${item.id}`} className="rounded-full px-1.5 py-[1px]"
+                        style={STATUS_STYLE[deckStatus]}>
+                    {STATUS_LABEL[deckStatus]}
+                  </span>
+                </Tooltip>
+              </>
+            )}
             {lapse && <span style={{ color: "var(--rose)" }}> · missed it</span>}
           </span>
         </span>
@@ -99,6 +131,21 @@ export default function FeedCard({
           {ago(item.ts, now)}
         </span>
       </button>
+
+      {showSentence && card.sentence && (
+        <div data-testid={`sentence-${item.id}`} className="pl-[54px] pr-4 pt-2">
+          <p className="jp text-[14px] leading-relaxed" style={{ color: "var(--ink)" }}>
+            {boldParts(card.sentence).map((p, i) => p.bold
+              ? <b key={i} style={{ color: "var(--violet-soft)" }}>{p.text}</b>
+              : <span key={i}>{p.text}</span>)}
+          </p>
+          {card.translation && (
+            <p className="mt-0.5 text-[12px]" style={hidden ? BLUR : { color: "var(--ink-faint)" }}>
+              {plainText(card.translation)}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2.5 pt-2">
         {EMOJI.map((emoji) => {
@@ -128,6 +175,22 @@ export default function FeedCard({
             </button>
           );
         })}
+
+        {card.sentence && (
+          <button
+            data-testid={`sentence-toggle-${item.id}`}
+            aria-pressed={showSentence}
+            onClick={() => setFlipped((f) => !f)}
+            title={showSentence ? "Hide the sentence" : "Show the sentence"}
+            className="jp inline-flex min-h-7 items-center rounded-full px-2 text-[12px] transition-colors"
+            style={{
+              color: showSentence ? "var(--violet-soft)" : "var(--ink-faint)",
+              background: showSentence ? "var(--pane-lift)" : "transparent",
+            }}
+          >
+            例
+          </button>
+        )}
 
         <button
           data-testid={`thread-${item.id}`}
