@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import Feed from "@/app/components/Feed";
 import type { Engagement, FeedItem, PersonView } from "@/lib/types";
 
@@ -100,7 +100,7 @@ describe("comments", () => {
     expect(onComment).not.toHaveBeenCalled();
   });
 
-  it("flags comments written since you last looked, but not your own", () => {
+  it("flags other people's comments you haven't read, but not your own", () => {
     view({
       "peter:1": {
         reactions: {},
@@ -109,13 +109,63 @@ describe("comments", () => {
           { user: "jp", text: "mine", at: 6000 },
         ],
       },
-    }, { unreadSince: 4000 });
+    }, { seen: { _floor: 4000 } });
     expect(screen.getByTestId("thread-peter:1").textContent).toContain("1 new");
   });
 
-  it("says nothing is new when everything predates your last visit", () => {
-    view(withComment, { unreadSince: 9999 });
+  it("says nothing is new once you've opened the thread since", () => {
+    view(withComment, { seen: { _floor: 0, "peter:1": 9999 } });
     expect(screen.getByTestId("thread-peter:1").textContent).not.toContain("new");
+  });
+});
+
+describe("reading a thread", () => {
+  const unread = {
+    "peter:1": { reactions: {}, comments: [{ user: "peter", text: "hi", at: 5000 }] },
+  };
+  const base = { items: [card], people, viewer: "jp", apiKey: "key_jp" };
+
+  it("happens when you open it", () => {
+    const onSeen = vi.fn();
+    render(<Feed {...base} engagement={unread} seen={{ _floor: 1000 }} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    // The newest comment on screen, not the clock: anything newer is unseen.
+    expect(onSeen).toHaveBeenCalledWith("peter:1", 5000);
+  });
+
+  it("doesn't happen for a thread with nothing unread", () => {
+    const onSeen = vi.fn();
+    render(<Feed {...base} engagement={unread} seen={{ _floor: 9000 }} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    expect(onSeen).not.toHaveBeenCalled();
+  });
+
+  it("isn't asked for twice when the save didn't stick", () => {
+    const onSeen = vi.fn();
+    const r = render(<Feed {...base} engagement={unread} seen={{ _floor: 1000 }} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    // A reload after a failed save brings back the same stale read state.
+    r.rerender(<Feed {...base} engagement={{ ...unread }} seen={{ _floor: 1000 }} onSeen={onSeen} />);
+    expect(onSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it("happens again when a new comment lands in the thread you have open", () => {
+    const onSeen = vi.fn();
+    const r = render(<Feed {...base} engagement={unread} seen={{ _floor: 1000 }} onSeen={onSeen} />);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    const more = { "peter:1": { reactions: {}, comments: [
+      ...unread["peter:1"].comments, { user: "peter", text: "also", at: 7000 },
+    ] } };
+    r.rerender(<Feed {...base} engagement={more} seen={{ _floor: 1000, "peter:1": 6000 }} onSeen={onSeen} />);
+    expect(onSeen).toHaveBeenCalledTimes(2);
+    expect(onSeen).toHaveBeenLastCalledWith("peter:1", 7000);
+  });
+
+  it("keeps the new pills while you're reading, even after it's marked read", () => {
+    const r = render(<Feed {...base} engagement={unread} seen={{ _floor: 1000 }} onSeen={() => {}} />);
+    fireEvent.click(screen.getByTestId("thread-peter:1"));
+    r.rerender(<Feed {...base} engagement={unread} seen={{ _floor: 1000, "peter:1": 99999 }} onSeen={() => {}} />);
+    expect(screen.getByText("new")).toBeInTheDocument();
   });
 });
 
@@ -149,7 +199,7 @@ describe("jumping to the first unread comment", () => {
     const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
     const other: FeedItem = { ...card, id: "peter:0", ts: card.ts + 1000 };
     const unread = (id: string) => ({ [id]: { reactions: {}, comments: [{ user: "peter", text: "hi", at: 5000 }] } });
-    const props = { items: [other, card], people, viewer: "jp", apiKey: "key_jp", unreadSince: 1000, jumpSignal: 1 };
+    const props = { items: [other, card], people, viewer: "jp", apiKey: "key_jp", seen: { _floor: 1000 }, jumpSignal: 1 };
 
     const r = render(<Feed {...props} engagement={unread("peter:1")} />);
     expect(scroll).toHaveBeenCalledTimes(1);

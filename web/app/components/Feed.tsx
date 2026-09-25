@@ -2,13 +2,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/app/components/Avatar";
 import FeedCard from "@/app/components/FeedCard";
+import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
 import type { Engagement, FeedItem, PersonView } from "@/lib/types";
 
 export { EMOJI, ago } from "@/app/components/FeedCard";
 
 export default function Feed({
   items, people, engagement = {}, viewer, apiKey,
-  onReact, onComment, unreadSince = 0, jumpSignal = 0,
+  onReact, onComment, seen = {}, onSeen, jumpSignal = 0,
 }: {
   items: FeedItem[];
   people: PersonView[];
@@ -17,18 +18,27 @@ export default function Feed({
   apiKey?: string;
   onReact?: (itemId: string, emoji: string | null) => void;
   onComment?: (itemId: string, text: string) => void;
-  /** Comments newer than this are marked as new. */
-  unreadSince?: number;
-  /** Bumping this scrolls to the first card with an unread comment. */
+  /** How far you've read each thread, plus the floor. See lib/unread. */
+  seen?: SeenMap;
+  /** A thread with something unread is open; upTo is its newest comment shown. */
+  onSeen?: (itemId: string, upTo: number) => void;
+  /** Bumping this opens the thread with the newest unread comment. */
   jumpSignal?: number;
 }) {
   const [only, setOnly] = useState<string | null>(null);
   const [quizzed, setQuizzed] = useState<Set<string>>(new Set());
   const [openThread, setOpenThread] = useState<string | null>(null);
+  // What counted as read when each thread was opened. Opening one marks it
+  // read, and its "new" pills must not vanish while you're reading them.
+  const [baseline, setBaseline] = useState<Record<string, number>>({});
   // Keyed by card, so a half-written comment stays on the card it was for.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const unreadRef = useRef<HTMLLIElement | null>(null);
   const jumpedFor = useRef(0);
+  // The newest comment each thread was last marked read for. A save that fails
+  // reloads the old read state; without this, that would ask again, fail
+  // again, and reload forever.
+  const asked = useRef(new Map<string, number>());
 
   const byId = useMemo(() => new Map(people.map((p) => [p.profile.id, p])), [people]);
   const indexOf = useMemo(
@@ -37,13 +47,17 @@ export default function Feed({
   const now = Date.now();
   const shown = only ? items.filter((i) => i.user === only) : items;
 
-  const firstUnreadId = useMemo(() => {
-    for (const item of items) {
-      const cs = engagement[item.id]?.comments ?? [];
-      if (cs.some((c) => c.at > unreadSince && c.user !== viewer)) return item.id;
-    }
-    return null;
-  }, [items, engagement, unreadSince, viewer]);
+  const me = viewer ?? null;
+  const unread = useMemo(() => unreadThreads(engagement, me, seen), [engagement, me, seen]);
+  const firstUnreadId = unread[0] ?? null;
+
+  const openThreadFor = (id: string) => {
+    setBaseline((prev) => ({ ...prev, [id]: readUpTo(seen, id) }));
+    setOpenThread(id);
+  };
+  const toggleThread = (id: string) => (openThread === id ? setOpenThread(null) : openThreadFor(id));
+  const freshSince = (id: string) =>
+    !me ? Infinity : openThread === id ? (baseline[id] ?? readUpTo(seen, id)) : readUpTo(seen, id);
 
   // Once per bump: a refresh that moves the first unread card must not drag
   // you away from whatever you are reading.
@@ -51,9 +65,21 @@ export default function Feed({
     if (jumpSignal > 0 && jumpSignal !== jumpedFor.current && unreadRef.current) {
       jumpedFor.current = jumpSignal;
       unreadRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      if (firstUnreadId) setOpenThread(firstUnreadId);
+      if (firstUnreadId) openThreadFor(firstUnreadId);
     }
   }, [jumpSignal, firstUnreadId]);
+
+  // Having a thread open is reading it, including comments that land while it is.
+  useEffect(() => {
+    if (!openThread || !onSeen) return;
+    const fresh = (engagement[openThread]?.comments ?? [])
+      .filter((c) => isUnread(c, openThread, me, seen));
+    if (fresh.length === 0) return;
+    const upTo = newestIn(engagement[openThread]);
+    if (asked.current.get(openThread) === upTo) return;
+    asked.current.set(openThread, upTo);
+    onSeen(openThread, upTo);
+  }, [openThread, engagement, seen, me, onSeen]);
 
   const toggleQuiz = (id: string) =>
     setQuizzed((prev) => {
@@ -121,8 +147,8 @@ export default function Feed({
               hidden={quizzed.has(item.id)}
               onToggleQuiz={() => toggleQuiz(item.id)}
               open={openThread === item.id}
-              onToggleThread={() => setOpenThread(openThread === item.id ? null : item.id)}
-              freshSince={unreadSince}
+              onToggleThread={() => toggleThread(item.id)}
+              freshSince={freshSince(item.id)}
               draft={drafts[item.id] ?? ""}
               onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
               onSubmit={() => submit(item.id)}

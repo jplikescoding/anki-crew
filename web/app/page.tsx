@@ -343,7 +343,7 @@ export default function Page() {
           apiKey={apiKey}
           onReact={react}
           onComment={comment}
-          unreadSince={unreadSince.current}
+          seen={{ _floor: unreadSince.current }}
           jumpSignal={jumpSignal}
         />
       )}
