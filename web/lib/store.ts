@@ -8,6 +8,7 @@ const redis = new Redis({
 });
 
 export const FEED_CAP = 500;
+export const WORDS_CHUNK = 5000;
 
 const USERS = "crew:users";
 const FEED = "feed";
@@ -80,7 +81,10 @@ export async function saveSnapshot(body: IngestBody): Promise<void> {
     }
     const tx = redis.multi();
     tx.del(wordsKey(id));
-    if (Object.keys(entries).length > 0) tx.hset(wordsKey(id), entries);
+    const pairs = Object.entries(entries);
+    for (let i = 0; i < pairs.length; i += WORDS_CHUNK) {
+      tx.hset(wordsKey(id), Object.fromEntries(pairs.slice(i, i + WORDS_CHUNK)));
+    }
     await tx.exec();
   }
 }

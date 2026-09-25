@@ -5,7 +5,9 @@ const state = { hashes: new Map<string, Map<string, string>>(),
                 strings: new Map<string, unknown>(),
                 sets: new Map<string, Set<string>>(),
                 lists: new Map<string, string[]>(),
-                zsets: new Map<string, Map<string, number>>() };
+                zsets: new Map<string, Map<string, number>>(),
+                // Keys hset was called with from inside a multi() transaction, in order.
+                multiHsetKeys: [] as string[] };
 
 vi.mock("@upstash/redis", () => ({
   Redis: class {
@@ -64,7 +66,10 @@ vi.mock("@upstash/redis", () => ({
       const ops: (() => Promise<unknown>)[] = [];
       const tx = {
         del: (k: string) => { ops.push(() => this.del(k)); return tx; },
-        hset: (k: string, e: Record<string, string>) => { ops.push(() => this.hset(k, e)); return tx; },
+        hset: (k: string, e: Record<string, string>) => {
+          ops.push(() => { state.multiHsetKeys.push(k); return this.hset(k, e); });
+          return tx;
+        },
         exec: async () => { for (const op of ops) await op(); return []; },
       };
       return tx;
@@ -75,7 +80,7 @@ vi.mock("@upstash/redis", () => ({
 import {
   saveSnapshot, listUsers, getPerson, getFeed, markEngaged, setReaction, addComment,
   getEngagement, setAvatar, getSeen, markSeen, markAllSeen, FEED_CAP, COMMENT_CAP,
-  getNoteTypes, getWordStatuses, getFieldMaps, setFieldMap,
+  getNoteTypes, getWordStatuses, getFieldMaps, setFieldMap, WORDS_CHUNK,
 } from "@/lib/store";
 import type { IngestBody, FeedItem } from "@/lib/types";
 
@@ -98,7 +103,7 @@ function card(id: string, ts: number): FeedItem {
 describe("store", () => {
   beforeEach(() => {
     state.hashes.clear(); state.strings.clear(); state.sets.clear();
-    state.zsets.clear(); state.lists.clear();
+    state.zsets.clear(); state.lists.clear(); state.multiHsetKeys.length = 0;
   });
 
   it("registers the user and round-trips a snapshot", async () => {
@@ -195,6 +200,15 @@ describe("store", () => {
 
     await saveSnapshot(body({ words: { known: [], learning: [], new: ["見る"] } }));
     expect(await getWordStatuses("jp", ["話す", "見る"])).toEqual({ 見る: "new" });
+  });
+
+  it("writes a big word index in chunks inside one transaction", async () => {
+    const words = Array.from({ length: 12001 }, (_, i) => `w${i}`);
+    await saveSnapshot(body({ noteTypes: {}, words: { known: words, learning: [], new: [] } }));
+    expect(state.multiHsetKeys).toHaveLength(Math.ceil(words.length / WORDS_CHUNK));
+    expect(state.multiHsetKeys.every((k) => k === "user:jp:words")).toBe(true);
+    expect(await getWordStatuses("jp", [words[0], words[words.length - 1]]))
+      .toEqual({ w0: "known", [words[words.length - 1]]: "known" });
   });
 
   it("leaves the word index alone when a publish leaves it out", async () => {
