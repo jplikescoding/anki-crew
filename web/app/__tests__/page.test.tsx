@@ -261,6 +261,8 @@ describe("what's new", () => {
     cleanup();
     localStorage.removeItem(WHATS_NEW);
     await mount();
+    // The first render lands outside act, so let the pop-up's Esc listener attach.
+    await act(async () => {});
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByTestId("whats-new")).toBeNull();
     expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
