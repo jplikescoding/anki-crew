@@ -8,6 +8,16 @@ export type Note = { id: string; date: string; title: string; items: string[] };
 
 export const NOTES: Note[] = [
   {
+    id: "2026-09-board",
+    date: "September 2026",
+    title: "Board fixes",
+    items: [
+      "Today resets for everyone at their own 4am, even if they haven't synced yet. No more yesterday's cards counting as today.",
+      "The ▲▼ arrows now follow Today / Week / All time.",
+      "Tap anyone to see their best day, with the year.",
+    ],
+  },
+  {
     id: "2026-09-feed",
     date: "September 2026",
     title: "Feed got an upgrade",

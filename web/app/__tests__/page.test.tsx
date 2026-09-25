@@ -268,6 +268,19 @@ describe("what's new", () => {
     expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
   });
 
+  it("keeps page shortcuts from firing behind it", async () => {
+    visited();
+    await mount();
+    await act(async () => {});
+    const before = crewCalls();
+    for (const key of ["2", "w", "r", "?"]) fireEvent.keyDown(window, { key });
+
+    expect(crewCalls()).toBe(before);
+    expect(screen.queryByTestId("thread-peter:1")).toBeNull();
+    expect(screen.queryByText("Shortcuts")).toBeNull();
+    expect(screen.getByTestId("whats-new")).toBeInTheDocument();
+  });
+
   it("shows nothing to someone brand new, and counts them as current", async () => {
     await mount();
     expect(screen.queryByTestId("whats-new")).toBeNull();

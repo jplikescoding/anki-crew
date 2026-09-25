@@ -5,9 +5,14 @@ import type { Note } from "@/lib/whatsNew";
 /** Release notes over the page. Every way out counts as read. */
 export default function WhatsNew({ notes, onClose }: { notes: Note[]; onClose: () => void }) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Caught first and stopped here, so the page's own shortcuts don't fire
+    // behind the pop-up. Default behaviour (Tab, scrolling) still happens.
+    const onKey = (e: KeyboardEvent) => {
+      e.stopImmediatePropagation();
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
   return (
@@ -35,7 +40,11 @@ export default function WhatsNew({ notes, onClose }: { notes: Note[]; onClose: (
           ))}
         </div>
         <div className="mt-4 flex justify-end">
-          <button onClick={onClose} className="text-[11px]" style={{ color: "var(--cyan-soft)" }}>
+          <button
+            onClick={onClose}
+            className="min-h-[44px] rounded-full px-6 text-[13px] font-semibold"
+            style={{ background: "var(--pane-lift)", color: "var(--cyan-soft)" }}
+          >
             Got it
           </button>
         </div>
