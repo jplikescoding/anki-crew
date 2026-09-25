@@ -6,6 +6,7 @@ const addComment = vi.fn<AnyFn>();
 const setAvatar = vi.fn<AnyFn>(async () => true);
 const markSeen = vi.fn<AnyFn>();
 const markAllSeen = vi.fn<AnyFn>();
+const setFieldMap = vi.fn<AnyFn>(async () => ({ T: { word: "Expression" } }));
 
 vi.mock("@/lib/store", () => ({
   setReaction: (...a: unknown[]) => setReaction(...a),
@@ -13,6 +14,8 @@ vi.mock("@/lib/store", () => ({
   setAvatar: (...a: unknown[]) => setAvatar(...a),
   markSeen: (...a: unknown[]) => markSeen(...a),
   markAllSeen: (...a: unknown[]) => markAllSeen(...a),
+  setFieldMap: (...a: unknown[]) => setFieldMap(...a),
+  getNoteTypes: async (id: string) => (id === "jp" ? { T: ["Expression", "Meaning"] } : {}),
   MAX_COMMENT_CHARS: 280,
 }));
 
@@ -20,6 +23,7 @@ import { POST as react } from "@/app/api/react/route";
 import { POST as comment } from "@/app/api/comment/route";
 import { POST as avatar } from "@/app/api/avatar/route";
 import { POST as seen } from "@/app/api/seen/route";
+import { POST as fieldmap } from "@/app/api/fieldmap/route";
 
 function req(body: unknown, key = "key_jp") {
   return new Request(`https://x.test/api/thing?key=${key}`, {
@@ -35,6 +39,7 @@ beforeEach(() => {
   setAvatar.mockClear();
   markSeen.mockClear();
   markAllSeen.mockClear();
+  setFieldMap.mockClear();
   setAvatar.mockResolvedValue(true as unknown as never);
   process.env.READ_KEYS = JSON.stringify({ key_jp: "jp", key_p: "peter" });
 });
@@ -192,5 +197,38 @@ describe("POST /api/seen", () => {
 
   it("rejects a missing key", async () => {
     expect((await seen(req({ itemId: "peter:1", upTo: 5000 }, ""))).status).toBe(401);
+  });
+});
+
+describe("POST /api/fieldmap", () => {
+  it("saves the key holder's choice for one of their note types", async () => {
+    const res = await fieldmap(req({ noteType: "T", map: { word: "Expression" } }));
+    expect(res.status).toBe(200);
+    expect(setFieldMap).toHaveBeenCalledWith("jp", "T", { word: "Expression" });
+    expect((await res.json()).fieldMaps).toEqual({ T: { word: "Expression" } });
+  });
+
+  it("resets to auto on an empty map", async () => {
+    await fieldmap(req({ noteType: "T", map: {} }));
+    expect(setFieldMap).toHaveBeenCalledWith("jp", "T", {});
+  });
+
+  it("rejects a missing or unknown key", async () => {
+    expect((await fieldmap(req({ noteType: "T", map: {} }, "nope"))).status).toBe(401);
+  });
+
+  it.each([
+    ["a note type you don't have", { noteType: "Other", map: { word: "Expression" } }],
+    ["a field that note type doesn't have", { noteType: "T", map: { word: "Nope" } }],
+    ["a role that doesn't exist", { noteType: "T", map: { colour: "Expression" } }],
+    ["a map that isn't an object", { noteType: "T", map: "Expression" }],
+  ])("rejects %s", async (_name, body) => {
+    expect((await fieldmap(req(body))).status).toBe(400);
+    expect(setFieldMap).not.toHaveBeenCalled();
+  });
+
+  it("can only change your own cards", async () => {
+    // Peter's key has no note type T, so it can't borrow JP's.
+    expect((await fieldmap(req({ noteType: "T", map: { word: "Expression" } }, "key_p"))).status).toBe(400);
   });
 });
