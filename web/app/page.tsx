@@ -5,11 +5,13 @@ import CrewChart from "@/app/components/CrewChart";
 import Feed, { ago } from "@/app/components/Feed";
 import PersonPanel from "@/app/components/PersonPanel";
 import StatTiles from "@/app/components/StatTiles";
+import WhatsNew from "@/app/components/WhatsNew";
 import { Avatar, AvatarUploader } from "@/app/components/Avatar";
 import { rankBy } from "@/lib/metrics";
 import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
 import { FLOOR, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
+import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
 import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "you";
@@ -34,6 +36,7 @@ export default function Page() {
   const [spinning, setSpinning] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [hint, setHint] = useState(false);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [engagement, setEngagement] = useState<Record<string, Engagement>>({});
   const [jumpSignal, setJumpSignal] = useState(0);
   // Something that went wrong after the page was already showing: a refresh
@@ -99,6 +102,8 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
+    // Before the first load, which writes the snapshot this reads as "been here before".
+    setNotes(notesOnArrival(readSeen() !== null));
     setApiKey(new URLSearchParams(window.location.search).get("key") ?? "");
     void load();
   }, [load]);
@@ -177,6 +182,11 @@ export default function Page() {
     setHint(false);
     try { localStorage.setItem(HINT_KEY, "1"); } catch { /* storage blocked */ }
   };
+
+  const closeNotes = useCallback(() => {
+    markNotesSeen();
+    setNotes([]);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -437,9 +447,18 @@ export default function Page() {
                 ),
               )}
             </dl>
+            <button
+              onClick={() => { setShortcuts(false); setNotes(NOTES); }}
+              className="mt-4 text-[11.5px]"
+              style={{ color: "var(--cyan-soft)" }}
+            >
+              What&apos;s new
+            </button>
           </div>
         </div>
       )}
+
+      {notes.length > 0 && <WhatsNew notes={notes} onClose={closeNotes} />}
     </main>
   );
 }

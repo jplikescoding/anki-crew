@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within, cleanup } from "@testing-library/react";
 import Page from "@/app/page";
 import { playCelebration } from "@/lib/sound";
+import { NOTES } from "@/lib/whatsNew";
 import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
 
 vi.mock("@/lib/sound", () => ({ playCelebration: vi.fn() }));
@@ -220,5 +221,67 @@ describe("writes that fail", () => {
     await act(async () => { fireEvent.click(screen.getByText("Post")); });
     await waitFor(() => expect(screen.queryByText("がんばれ")).not.toBeInTheDocument());
     expect(screen.getByTestId("sync-note")).toHaveTextContent(/didn't post/i);
+  });
+});
+
+describe("what's new", () => {
+  const WHATS_NEW = "anki-crew:whatsnew:v1";
+  const visited = () => localStorage.setItem(SEEN, JSON.stringify({ totals: {}, order: [], at: 0 }));
+
+  it("pops up once for someone who was here before this release", async () => {
+    visited();
+    await mount();
+    const card = screen.getByTestId("whats-new");
+    expect(card).toHaveTextContent(NOTES[0].title);
+
+    fireEvent.click(within(card).getByRole("button", { name: "Got it" }));
+    expect(screen.queryByTestId("whats-new")).toBeNull();
+    expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
+
+    cleanup();
+    await mount();
+    expect(screen.queryByTestId("whats-new")).toBeNull();
+  });
+
+  it("leaves the hint bubble alone when it closes", async () => {
+    visited();
+    await mount();
+    expect(screen.getByText(/Your numbers update/)).toBeInTheDocument();
+    fireEvent.click(within(screen.getByTestId("whats-new")).getByRole("button", { name: "Got it" }));
+    expect(screen.getByText(/Your numbers update/)).toBeInTheDocument();
+  });
+
+  it("closes on the backdrop and on Esc, and both count as seen", async () => {
+    visited();
+    await mount();
+    fireEvent.click(screen.getByTestId("whats-new"));
+    expect(screen.queryByTestId("whats-new")).toBeNull();
+    expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
+
+    cleanup();
+    localStorage.removeItem(WHATS_NEW);
+    await mount();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("whats-new")).toBeNull();
+    expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
+  });
+
+  it("shows nothing to someone brand new, and counts them as current", async () => {
+    await mount();
+    expect(screen.queryByTestId("whats-new")).toBeNull();
+    expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
+  });
+
+  it("can be read again from the ? panel", async () => {
+    await mount();
+    fireEvent.click(screen.getByTestId("shortcuts-button"));
+    fireEvent.click(screen.getByRole("button", { name: "What's new" }));
+    const card = screen.getByTestId("whats-new");
+    expect(card).toHaveTextContent(NOTES[0].title);
+    expect(screen.queryByText("Shortcuts")).toBeNull();
+
+    fireEvent.click(within(card).getByRole("button", { name: "Got it" }));
+    expect(screen.queryByTestId("whats-new")).toBeNull();
+    expect(localStorage.getItem(WHATS_NEW)).toBe(NOTES[0].id);
   });
 });
