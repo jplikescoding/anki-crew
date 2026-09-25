@@ -104,9 +104,9 @@ Board) is untouched.
 - "new" pills inside a thread use the `seen` value from *before* the thread was
   opened, captured when it opens, so marking it read doesn't make the pills
   vanish while you're reading.
-- **All caught up:** when the last unread thread is opened, the badge animates
-  out and the Unread filter shows a small jade "All caught up ✓" row instead of
-  going blank abruptly.
+- **All caught up:** when the last unread thread is opened, the badge counts
+  down to nothing and the Unread filter shows a small jade "All caught up ✓"
+  row instead of going blank abruptly.
 
 ## 5. Filter bar
 
@@ -126,8 +126,7 @@ blur, `--edge` bottom hairline) so it's reachable mid-scroll.
 - Empty result → one quiet line naming the filter ("No missed cards from Adam
   yet"), plus a "Clear filters" link.
 - Mobile: the row scrolls horizontally inside itself (no page overflow); the
-  "tap a word to hide the meaning" hint moves to the empty/first-load state
-  only.
+  "tap a word to hide the meaning" hint becomes a tooltip on the word.
 
 ## 6. Less scrolling
 

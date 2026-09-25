@@ -80,6 +80,10 @@ body {
   border-radius: var(--r-lane);
 }
 
+/* A row that scrolls sideways on a phone shouldn't show a scrollbar doing it. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* A metric you can ask about. The dotted rule is the affordance. */
 .defined {
   text-decoration: underline dotted var(--ink-ghost);

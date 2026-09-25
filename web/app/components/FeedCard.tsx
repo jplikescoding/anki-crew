@@ -67,6 +67,7 @@ export default function FeedCard({
     >
       <button
         onClick={onToggleQuiz}
+        title="Tap to hide the meaning"
         className="flex w-full items-start gap-3 px-4 pt-3 text-left"
       >
         {who

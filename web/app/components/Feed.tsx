@@ -1,11 +1,17 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Avatar } from "@/app/components/Avatar";
 import FeedCard from "@/app/components/FeedCard";
+import FeedFilters from "@/app/components/FeedFilters";
+import {
+  applyFilter, emptyMessage, groupByDay, isFiltered, NO_FILTER, type FeedFilter,
+} from "@/lib/feedView";
 import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
 import type { Engagement, FeedItem, PersonView } from "@/lib/types";
 
 export { EMOJI, ago } from "@/app/components/FeedCard";
+
+/** Cards rendered per step. Five hundred at once is a scroll, not a feed. */
+export const PAGE = 30;
 
 export default function Feed({
   items, people, engagement = {}, viewer, apiKey,
@@ -25,7 +31,11 @@ export default function Feed({
   /** Bumping this opens the thread with the newest unread comment. */
   jumpSignal?: number;
 }) {
-  const [only, setOnly] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FeedFilter>(NO_FILTER);
+  const [limit, setLimit] = useState(PAGE);
+  // Every thread that has been unread while the Unread filter is on. Reading
+  // one must not pull it out from under you mid-list.
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
   const [quizzed, setQuizzed] = useState<Set<string>>(new Set());
   const [openThread, setOpenThread] = useState<string | null>(null);
   // What counted as read when each thread was opened. Opening one marks it
@@ -45,11 +55,33 @@ export default function Feed({
     () => new Map(people.map((p, i) => [p.profile.id, i])), [people]);
 
   const now = Date.now();
-  const shown = only ? items.filter((i) => i.user === only) : items;
 
   const me = viewer ?? null;
   const unread = useMemo(() => unreadThreads(engagement, me, seen), [engagement, me, seen]);
   const firstUnreadId = unread[0] ?? null;
+
+  const tz = (me && byId.get(me)?.profile.tz) || "UTC";
+
+  useEffect(() => {
+    if (!filter.unread) return;
+    setPinned((prev) => (unread.every((id) => prev.has(id)) ? prev : new Set([...prev, ...unread])));
+  }, [filter.unread, unread]);
+
+  const unreadIds = useMemo(() => new Set([...pinned, ...unread]), [pinned, unread]);
+  const shown = useMemo(
+    () => applyFilter(items, filter, engagement, unreadIds),
+    [items, filter, engagement, unreadIds]);
+  const groups = groupByDay(shown.slice(0, limit), shown, tz, now);
+  const caughtUp = filter.unread && unread.length === 0;
+  const personName = filter.person
+    ? byId.get(filter.person)?.profile.displayName ?? filter.person
+    : null;
+
+  const changeFilter = (next: FeedFilter) => {
+    setFilter(next);
+    setLimit(PAGE);
+    if (!next.unread) setPinned(new Set());
+  };
 
   const openThreadFor = (id: string) => {
     setBaseline((prev) => ({ ...prev, [id]: readUpTo(seen, id) }));
@@ -99,64 +131,93 @@ export default function Feed({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-        {people.map((p) => {
-          const on = only === p.profile.id;
-          return (
-            <button
-              key={p.profile.id}
-              data-testid={`chip-${p.profile.id}`}
-              aria-pressed={on}
-              onClick={() => setOnly(on ? null : p.profile.id)}
-              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] transition-colors"
-              style={{
-                borderColor: on ? "var(--edge-lit)" : "var(--edge)",
-                background: on ? "var(--pane-lift)" : "transparent",
-                color: on ? "var(--ink)" : "var(--ink-dim)",
-              }}
-            >
-              <Avatar profile={p.profile} size={16} index={indexOf.get(p.profile.id) ?? 0} />
-              {p.profile.displayName}
-            </button>
-          );
-        })}
-        <span className="ml-auto text-[10.5px]" style={{ color: "var(--ink-faint)" }}>
-          tap a word to hide the meaning
-        </span>
-      </div>
+      <FeedFilters
+        people={people}
+        indexOf={indexOf}
+        filter={filter}
+        onChange={changeFilter}
+        unreadCount={unread.length}
+      />
+
+      {caughtUp && (
+        <p
+          data-testid="caught-up"
+          className="lane-enter mx-3 mt-3 rounded-[var(--r-lane)] border px-4 py-2.5 text-center text-[12px]"
+          style={{ borderColor: "rgba(52,211,153,.28)", background: "rgba(52,211,153,.07)", color: "var(--jade)" }}
+        >
+          All caught up ✓
+        </p>
+      )}
 
       {shown.length === 0 ? (
-        <div data-testid="feed-empty" className="px-6 py-16 text-center">
-          <p className="text-[15px]" style={{ color: "var(--ink-dim)" }}>No cards yet.</p>
-          <p className="mx-auto mt-2 max-w-sm text-[13px]" style={{ color: "var(--ink-faint)" }}>
-            Whatever any of you reviews next shows up here, in whatever deck it came from.
-          </p>
-        </div>
+        caughtUp ? null : isFiltered(filter) ? (
+          <div data-testid="feed-empty" className="px-6 py-16 text-center">
+            <p className="text-[14px]" style={{ color: "var(--ink-dim)" }}>{emptyMessage(filter, personName)}</p>
+            <button
+              data-testid="clear-filters"
+              onClick={() => changeFilter(NO_FILTER)}
+              className="mt-2 min-h-8 text-[12px]"
+              style={{ color: "var(--cyan-soft)" }}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div data-testid="feed-empty" className="px-6 py-16 text-center">
+            <p className="text-[15px]" style={{ color: "var(--ink-dim)" }}>No cards yet.</p>
+            <p className="mx-auto mt-2 max-w-sm text-[13px]" style={{ color: "var(--ink-faint)" }}>
+              Whatever any of you reviews next shows up here, in whatever deck it came from.
+            </p>
+          </div>
+        )
       ) : (
-        <ul className="space-y-2 px-3 pb-6">
-          {shown.map((item) => (
-            <FeedCard
-              key={item.id}
-              item={item}
-              byId={byId}
-              indexOf={indexOf}
-              engagement={engagement[item.id]}
-              viewer={viewer}
-              canWrite={canWrite}
-              now={now}
-              hidden={quizzed.has(item.id)}
-              onToggleQuiz={() => toggleQuiz(item.id)}
-              open={openThread === item.id}
-              onToggleThread={() => toggleThread(item.id)}
-              freshSince={freshSince(item.id)}
-              draft={drafts[item.id] ?? ""}
-              onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
-              onSubmit={() => submit(item.id)}
-              onReact={onReact}
-              cardRef={item.id === firstUnreadId ? unreadRef : undefined}
-            />
+        <div className="px-3 pb-6">
+          {groups.map((g) => (
+            <section key={g.key} data-testid={`day-${g.key}`}>
+              <h3
+                className="flex items-baseline gap-1.5 px-1.5 pb-2 pt-4 text-[10.5px] font-semibold uppercase tracking-[.09em]"
+                style={{ color: "var(--ink-faint)" }}
+              >
+                <span data-testid="day-label">{g.label}</span>
+                <span className="font-normal tabular-nums" style={{ color: "var(--ink-ghost)" }}>· {g.count}</span>
+              </h3>
+              <ul className="space-y-2">
+                {g.items.map((item) => (
+                  <FeedCard
+                    key={item.id}
+                    item={item}
+                    byId={byId}
+                    indexOf={indexOf}
+                    engagement={engagement[item.id]}
+                    viewer={viewer}
+                    canWrite={canWrite}
+                    now={now}
+                    hidden={quizzed.has(item.id)}
+                    onToggleQuiz={() => toggleQuiz(item.id)}
+                    open={openThread === item.id}
+                    onToggleThread={() => toggleThread(item.id)}
+                    freshSince={freshSince(item.id)}
+                    draft={drafts[item.id] ?? ""}
+                    onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
+                    onSubmit={() => submit(item.id)}
+                    onReact={onReact}
+                    cardRef={item.id === firstUnreadId ? unreadRef : undefined}
+                  />
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+          {shown.length > limit && (
+            <button
+              data-testid="show-more"
+              onClick={() => setLimit((l) => l + PAGE)}
+              className="pane mt-3 min-h-10 w-full text-[12px] transition-colors duration-150 hover:bg-[var(--pane-lift)]"
+              style={{ color: "var(--ink-dim)" }}
+            >
+              Show {Math.min(PAGE, shown.length - limit)} more · {shown.length - limit} left
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
