@@ -102,6 +102,33 @@ export function rankDeltas(people: PersonView[], range: Range): Record<string, n
   return out;
 }
 
+export type Momentum = { dir: 1 | -1; amount: number; rival: string; leading: boolean };
+
+/**
+ * Whether each person gained or lost ground since yesterday on the person just
+ * above them (the leader: on second place). Rank arrows only move on an
+ * overtake, which on a week can take days; this is the chase in between.
+ * Not for Today, where yesterday's day is a different contest altogether.
+ */
+export function momentum(people: PersonView[], range: Range): Record<string, Momentum | null> {
+  const out: Record<string, Momentum | null> = {};
+  const noHistory = people.every((p) => scoreAsOf(p, range, 1) === 0);
+  const ranked = rankBy(people, (p) => scoreAsOf(p, range, 0));
+  ranked.forEach((p, i) => {
+    const rival = i === 0 ? ranked[1] : ranked[i - 1];
+    if (range === "today" || noHistory || !rival) { out[p.profile.id] = null; return; }
+    const margin = (back: number) => scoreAsOf(p, range, back) - scoreAsOf(rival, range, back);
+    const change = margin(0) - margin(1);
+    out[p.profile.id] = change === 0 ? null : {
+      dir: change > 0 ? 1 : -1,
+      amount: Math.abs(change),
+      rival: rival.profile.displayName,
+      leading: i === 0,
+    };
+  });
+  return out;
+}
+
 /**
  * The Anki day it is right now for someone, from their zone and Anki's default
  * 4am rollover. A publisher only reports its day when it syncs, so without this

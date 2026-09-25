@@ -308,6 +308,7 @@ describe("card fields", () => {
   it("saves your choice and applies it straight away", async () => {
     await mount();
     fireEvent.keyDown(window, { key: "3" });
+    fireEvent.click(screen.getByRole("button", { name: /card setup/i }));
     fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "Vocabulary-English" } });
     const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/fieldmap"));
     expect(JSON.parse(call![1].body)).toEqual({ noteType: "Core", map: { word: "Vocabulary-English" } });
@@ -318,6 +319,7 @@ describe("card fields", () => {
     writeReply = new Response("{}", { status: 500 });
     await mount();
     fireEvent.keyDown(window, { key: "3" });
+    fireEvent.click(screen.getByRole("button", { name: /card setup/i }));
     await act(async () => {
       fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "Vocabulary-English" } });
     });

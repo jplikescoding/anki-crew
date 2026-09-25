@@ -8,9 +8,25 @@ const mine: FeedItem = { id: "jp:1", user: "jp", front: "5493", back: "", deck: 
   noteType: "Core", fields: { "Core-Index": "5493", "Vocabulary-Kanji": "作る", "Vocabulary-English": "to make",
                               Expression: "<b>作る</b>。" } };
 
+/** The editor starts folded away; most people never need it. */
+function openEditor() {
+  fireEvent.click(screen.getByRole("button", { name: /card setup/i }));
+}
+
 describe("CardFields", () => {
+  it("starts closed, opens and closes again", () => {
+    render(<CardFields noteTypes={noteTypes} fieldMaps={{}} items={[mine]} onSave={() => {}} />);
+    expect(screen.queryByLabelText("Core Word")).toBeNull();
+    openEditor();
+    expect(screen.getByLabelText("Core Word")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /card setup/i })).toHaveAttribute("aria-expanded", "true");
+    openEditor();
+    expect(screen.queryByLabelText("Core Word")).toBeNull();
+  });
+
   it("shows the guess as 'auto' and previews a real card", () => {
     render(<CardFields noteTypes={noteTypes} fieldMaps={{}} items={[mine]} onSave={() => {}} />);
+    openEditor();
     expect(screen.getByLabelText("Core Word")).toHaveValue("");
     expect(screen.getByRole("option", { name: "auto (Vocabulary-Kanji)" })).toBeInTheDocument();
     expect(screen.getByTestId("card-fields-preview-Core")).toHaveTextContent("作る — to make");
@@ -19,6 +35,7 @@ describe("CardFields", () => {
   it("saves a change for that note type only", () => {
     const onSave = vi.fn();
     render(<CardFields noteTypes={noteTypes} fieldMaps={{ Core: { sentence: "Expression" } }} items={[mine]} onSave={onSave} />);
+    openEditor();
     fireEvent.change(screen.getByLabelText("Core Meaning"), { target: { value: "Expression" } });
     expect(onSave).toHaveBeenCalledWith("Core", { sentence: "Expression", meaning: "Expression" });
   });
@@ -27,6 +44,7 @@ describe("CardFields", () => {
     const onSave = vi.fn();
     render(<CardFields noteTypes={noteTypes} fieldMaps={{ Core: { word: "Expression", meaning: "Expression" } }}
                        items={[]} onSave={onSave} />);
+    openEditor();
     fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "" } });
     expect(onSave).toHaveBeenLastCalledWith("Core", { meaning: "Expression" });
     fireEvent.click(screen.getByRole("button", { name: "Reset to auto" }));

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   rankDeltas,
+  momentum,
   currentDayKey,
   gapToNext,
   streakTier,
@@ -86,6 +87,50 @@ describe("rankDeltas", () => {
     const jp = person("jp", "JP", [day("2026-01-01", 1000), day(TODAY, 0)]);
     const pete = person("peter", "Peter", [day("2026-01-01", 900), day(TODAY, 200)]);
     expect(rankDeltas([jp, pete], "all")).toEqual({ jp: -1, peter: 1 });
+  });
+});
+
+describe("momentum", () => {
+  // Week ending yesterday: Adam 700, JP 40. Today JP does 34, Adam nothing.
+  const adam = () => person("adam", "Adam", [day("2026-09-16", 700), day(TODAY, 0)]);
+  const jp = () => person("jp", "JP", [day(YESTERDAY, 40), day(TODAY, 34)]);
+
+  it("says the chaser gained on the person above and the leader lost ground", () => {
+    expect(momentum([adam(), jp()], "week")).toEqual({
+      adam: { dir: -1, amount: 34, rival: "JP", leading: true },
+      jp: { dir: 1, amount: 34, rival: "Adam", leading: false },
+    });
+  });
+
+  it("counts a big day falling out of the window", () => {
+    // Peter's 09-14 day was in yesterday's window, not today's.
+    const j = person("jp", "JP", [day(YESTERDAY, 100), day(TODAY, 0)]);
+    const pete = person("peter", "Peter", [day("2026-09-14", 50), day(YESTERDAY, 200)]);
+    expect(momentum([j, pete], "week")).toMatchObject({
+      peter: { dir: -1, amount: 50, rival: "JP", leading: true },
+      jp: { dir: 1, amount: 50, rival: "Peter", leading: false },
+    });
+  });
+
+  it("is null when the gap didn't change", () => {
+    const a = person("adam", "Adam", [day(YESTERDAY, 100), day(TODAY, 10)]);
+    const j = person("jp", "JP", [day(YESTERDAY, 50), day(TODAY, 10)]);
+    expect(momentum([a, j], "week")).toEqual({ adam: null, jp: null });
+  });
+
+  it("compares with the person just above, not the leader", () => {
+    const a = person("adam", "Adam", [day(YESTERDAY, 900), day(TODAY, 0)]);
+    const p = person("peter", "Peter", [day(YESTERDAY, 500), day(TODAY, 0)]);
+    const j = person("jp", "JP", [day(YESTERDAY, 100), day(TODAY, 20)]);
+    expect(momentum([a, p, j], "week").jp).toEqual({ dir: 1, amount: 20, rival: "Peter", leading: false });
+    expect(momentum([a, p, j], "week").peter).toBeNull();
+  });
+
+  it("has nothing to say with no yesterday, one person, or on Today", () => {
+    expect(momentum([person("adam", "Adam", [day(TODAY, 9)]), person("jp", "JP", [day(TODAY, 3)])], "week"))
+      .toEqual({ adam: null, jp: null });
+    expect(momentum([jp()], "week")).toEqual({ jp: null });
+    expect(momentum([adam(), jp()], "today")).toEqual({ adam: null, jp: null });
   });
 });
 

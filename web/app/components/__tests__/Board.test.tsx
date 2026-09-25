@@ -85,4 +85,26 @@ describe("Board", () => {
     expect(screen.queryByTestId("delta-jp")).toBeNull();
     expect(screen.queryByTestId("delta-andy")).toBeNull();
   });
+
+  it("shows who gained ground on the week when nobody changed places", () => {
+    const jp = person("jp", "JP", "America/New_York",
+      [day("2026-09-20", { reviews: 0 }), day("2026-09-21", { reviews: 200 })]);
+    const andy = person("andy", "Andy", "America/New_York",
+      [day("2026-09-16", { reviews: 900 }), day("2026-09-20", { reviews: 50 })]);
+    render(<Board people={[jp, andy]} viewer="jp" range="week" />);
+    const up = screen.getByTestId("momentum-jp");
+    expect(up.textContent).toBe("▲");
+    expect(up).toHaveAttribute("title", "200 closer to Andy since yesterday");
+    expect(screen.getByTestId("momentum-andy")).toHaveAttribute("title", "Lead over JP shrank by 200 since yesterday");
+  });
+
+  it("keeps Today to rank arrows only", () => {
+    const jp = person("jp", "JP", "America/New_York",
+      [day("2026-09-20", { reviews: 0 }), day("2026-09-21", { reviews: 20 })]);
+    const andy = person("andy", "Andy", "America/New_York",
+      [day("2026-09-20", { reviews: 50 }), day("2026-09-21", { reviews: 90 })]);
+    render(<Board people={[jp, andy]} viewer="jp" range="today" />);
+    expect(screen.queryByTestId("momentum-jp")).toBeNull();
+    expect(screen.queryByTestId("momentum-andy")).toBeNull();
+  });
 });

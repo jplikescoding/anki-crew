@@ -1,8 +1,8 @@
 "use client";
 import {
-  crewDailyTotals, gapToNext, rankBy, rankDeltas, retention, shiftDays, totals, weekStart, windowFrom,
+  crewDailyTotals, gapToNext, momentum, rankBy, rankDeltas, retention, shiftDays, totals, weekStart, windowFrom,
 } from "@/lib/metrics";
-import type { Range } from "@/lib/metrics";
+import type { Momentum, Range } from "@/lib/metrics";
 import type { DayRow, PersonView } from "@/lib/types";
 import { Avatar } from "@/app/components/Avatar";
 import { CountUp, StreakStar, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
@@ -47,6 +47,13 @@ function sinceLabel(ms: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+function momentumLabel(m: Momentum): string {
+  if (m.leading) return `Lead over ${m.rival} ${m.dir > 0 ? "grew" : "shrank"} by ${m.amount} since yesterday`;
+  return m.dir > 0
+    ? `${m.amount} closer to ${m.rival} since yesterday`
+    : `${m.amount} further behind ${m.rival} since yesterday`;
+}
+
 function trackFor(person: PersonView): TrackDay[] {
   const by = new Map(person.days.map((d) => [d.date, d]));
   return Array.from({ length: 14 }, (_, i) => {
@@ -88,6 +95,7 @@ export default function Board({
   const score = (p: PersonView) => totals(daysFor(p, range)).reviews;
   const ranked = rankBy(people, score);
   const deltas = rankDeltas(people, range);
+  const moves = momentum(people, range);
   const gap = gapToNext(people, viewer, score);
   const crewToday = crewDailyTotals(people, people[0].meta.todayKey, 1)[0]?.total ?? 0;
   // Only zones that differ from the viewer's get a tag: labelling everyone is
@@ -108,6 +116,7 @@ export default function Board({
           const lead = i === 0;
           const stale = Date.now() - p.meta.lastPublishAt > STALE_AFTER_MS;
           const delta = deltas[id] ?? 0;
+          const move = moves[id];
           const passed = justPassed && p.profile.displayName === justPassed;
 
           return (
@@ -143,6 +152,17 @@ export default function Board({
                       title={delta > 0 ? `Up ${delta} since yesterday` : `Down ${-delta} since yesterday`}
                     >
                       {delta > 0 ? "▲" : "▼"}{Math.abs(delta)}
+                    </span>
+                  )}
+                  {/* No place changed: show the chase instead, smaller and quieter. */}
+                  {delta === 0 && move && (
+                    <span
+                      data-testid={`momentum-${id}`}
+                      className="text-[8px] leading-none opacity-75"
+                      style={{ color: move.dir > 0 ? "var(--jade)" : "var(--rose)" }}
+                      title={momentumLabel(move)}
+                    >
+                      {move.dir > 0 ? "▲" : "▼"}
                     </span>
                   )}
                 </div>

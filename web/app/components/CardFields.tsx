@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { guessMapping, plainText, resolveCard, ROLES } from "@/lib/fields";
 import type { FeedItem, FieldMap, FieldMaps, FieldRole } from "@/lib/types";
 
@@ -16,14 +17,28 @@ export default function CardFields({ noteTypes, fieldMaps, items, onSave }: {
   items: FeedItem[];
   onSave: (noteType: string, map: FieldMap) => void;
 }) {
+  // Closed on every visit: the guesses are usually right, and an open editor
+  // is what greets you when you tap your own name on the board.
+  const [open, setOpen] = useState(false);
   const types = Object.keys(noteTypes);
   if (types.length === 0) return null;
 
   return (
-    <section data-testid="card-fields" className="pane mx-3 mt-2.5 px-4 py-3">
-      <h3 className="text-[10.5px]" style={{ color: "var(--ink-dim)" }}>Card fields</h3>
-      <p className="mt-1 text-[11.5px]" style={{ color: "var(--ink-faint)" }}>
-        How your cards show up for everyone. We guess from the field names; fix anything that&apos;s off.
+    <section data-testid="card-fields" className="mx-3 mt-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="min-h-8 px-2 text-[11px]"
+        style={{ color: "var(--ink-faint)" }}
+      >
+        ⚙ Card setup <span style={{ color: "var(--cyan-soft)" }}>{open ? "Done ▾" : "Edit ▸"}</span>
+      </button>
+      {open && (
+      <div className="pane mt-1 px-4 py-3">
+      <p className="text-[11.5px]" style={{ color: "var(--ink-faint)" }}>
+        Tells the feed which part of your card is the word, the meaning and the example sentence.
+        Leave it on auto unless a card shows the wrong thing.
       </p>
       <ul className="mt-3 space-y-4">
         {types.map((nt) => {
@@ -75,6 +90,8 @@ export default function CardFields({ noteTypes, fieldMaps, items, onSave }: {
           );
         })}
       </ul>
+      </div>
+      )}
     </section>
   );
 }
