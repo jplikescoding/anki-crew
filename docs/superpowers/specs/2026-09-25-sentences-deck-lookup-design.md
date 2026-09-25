@@ -64,12 +64,15 @@ names each). It's small and is sent on every publish.
 `{ "known": [...], "learning": [...], "new": [...] }`.
 
 - **Candidates:** for every note that has at least one non-suspended card,
-  every field whose cleaned value:
-  - has `<b>` tags and `[…]` furigana readings removed, and whitespace
-    stripped;
-  - is 1–20 characters long;
-  - contains at least one kana or kanji character.
+  every named field whose:
+  - field name, lowercased, contains neither `sentence` nor `example`;
+  - cleaned value contains none of `。、！？!?．，`;
+  - cleaned value, after stripping, contains no space (half- or full-width);
+  - normalized value (`<b>` tags and `[…]` furigana readings removed,
+    whitespace stripped) is 1–20 characters long and contains at least one
+    kana or kanji character.
 
+  A value with more fields than the note type has names is not a candidate.
   This picks up the word, its kana and its furigana form without knowing which
   field is which, and leaves sentences out.
 - **Status per note, best of its cards:**

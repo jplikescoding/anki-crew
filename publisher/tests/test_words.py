@@ -81,6 +81,40 @@ class TestWordIndex(unittest.TestCase):
         idx = W.word_index(con)
         self.assertEqual((idx["known"], idx["new"]), (["話す"], []))
 
+    def test_skips_fields_named_like_sentences(self):
+        con = _con()
+        add_notetype(con, 8, "Sentence Notes", ["Expression", "Sentence", "Example"])
+        add_note(con, 1, 8, ["話す", "短い文", "例文"])
+        add_card(con, 10, 1, 5, ctype=0, queue=0)
+        idx = W.word_index(con)
+        self.assertEqual(idx["new"], ["話す"])
+
+    def test_skips_values_with_sentence_punctuation(self):
+        con = _con()
+        add_note(con, 1, 7, ["蚊に足を刺された。", "", "", ""])
+        add_card(con, 10, 1, 5, ctype=0, queue=0)
+        add_note(con, 2, 7, ["本当？", "", "", ""])
+        add_card(con, 11, 2, 5, ctype=0, queue=0)
+        idx = W.word_index(con)
+        self.assertEqual(idx["new"], [])
+
+    def test_skips_spaced_kana(self):
+        con = _con()
+        add_note(con, 1, 7, ["", "", "きんようび の よる", ""])
+        add_card(con, 10, 1, 5, ctype=0, queue=0)
+        add_note(con, 2, 7, ["", "", "きんようび", ""])
+        add_card(con, 11, 2, 5, ctype=0, queue=0)
+        idx = W.word_index(con)
+        self.assertEqual(idx["new"], ["きんようび"])
+
+    def test_values_without_a_field_name_are_skipped(self):
+        con = _con()
+        add_notetype(con, 9, "One Field", ["Word"])
+        add_note(con, 1, 9, ["話す", "聞く"])
+        add_card(con, 10, 1, 5, ctype=0, queue=0)
+        idx = W.word_index(con)
+        self.assertEqual(idx["new"], ["話す"])
+
     def test_caps_the_index_keeping_known_words_first(self):
         con = _con()
         add_note(con, 1, 7, ["話す", "", "", ""])

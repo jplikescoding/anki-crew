@@ -1,9 +1,9 @@
 """What's in this collection, for the dashboard's "is it in my deck?" badge.
 
 The index doesn't know which field is the word: it takes every short field
-with Japanese in it (the word, its kana, its furigana form) and leaves
-sentences out by length. The dashboard maps fields separately, so a mapping
-fix never needs a new index.
+with Japanese in it (the word, its kana, its furigana form), skipping fields
+named like a sentence and values with sentence punctuation or spaces. The
+dashboard maps fields separately, so a mapping fix never needs a new index.
 """
 import hashlib
 import json
@@ -20,6 +20,8 @@ MAX_FIELD_NAMES = 50
 _BOLD = re.compile(r"</?b>", re.I)
 _FURIGANA = re.compile(r"\[[^\]]*\]")
 _JAPANESE = re.compile(r"[぀-ヿ㐀-䶿一-鿿]")
+_SENTENCE_PUNCT = re.compile(r"[。、！？!?．，]")
+_SENTENCE_NAMES = ("sentence", "example")
 
 # Best first. Must match the dashboard's DeckStatus.
 _RANKS = ("known", "learning", "new")
@@ -65,10 +67,20 @@ def note_types(con):
 
 
 def word_index(con):
+    fields = anki_reader.field_names(con)
     words = {}
-    for _mid, flds, rank in _live_notes(con).values():
-        for raw in (flds or "").split(SEP):
-            word = normalize_word(clean_rich(raw))
+    for mid, flds, rank in _live_notes(con).values():
+        names = fields.get(mid, [])
+        for name, raw in zip(names, (flds or "").split(SEP)):
+            if any(frag in name.lower() for frag in _SENTENCE_NAMES):
+                continue
+            cleaned = clean_rich(raw)
+            if _SENTENCE_PUNCT.search(cleaned):
+                continue
+            stripped = cleaned.strip()
+            if " " in stripped or "　" in stripped:
+                continue
+            word = normalize_word(cleaned)
             if not (0 < len(word) <= MAX_WORD_LEN) or not _JAPANESE.search(word):
                 continue
             if word not in words or rank < words[word]:
