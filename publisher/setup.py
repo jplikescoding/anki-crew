@@ -2,6 +2,8 @@
 import json
 import os
 import plistlib
+import re
+import subprocess
 import sys
 
 from collection_paths import find_collections
@@ -128,6 +130,63 @@ def schedule_command(python_exe, script_dir):
     return '* * * * * "%s" "%s" --on-change >/dev/null 2>&1' % (python_exe, publish)
 
 
+DEFAULT_ENDPOINT = "https://anki-crew.vercel.app/api/ingest"
+INVITE = re.compile(r"^([a-z0-9_]+)-([0-9a-f]{32})$")
+
+
+def parse_invite(code):
+    """'harry-<token>' -> ('harry', '<token>'). One string, so the id can't be mistyped."""
+    match = INVITE.match(code.strip())
+    if not match:
+        raise ValueError("not an invite code")
+    return match.group(1), match.group(2)
+
+
+def run_task_script(path):
+    return subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                           "-File", path]).returncode
+
+
+def easy_setup(here, prompt, found, publish_main, run_task):
+    """
+    The double-click path for people who have never opened a terminal: two
+    questions, then it publishes once and turns on auto-sync by itself.
+    """
+    collection = choose_collection(found, prompt)
+    if not collection:
+        print("Couldn't find Anki on this computer.\n"
+              "Open Anki once, close it, then run setup again.")
+        return 1
+    print("✓ Found your Anki collection")
+
+    while True:
+        try:
+            user, token = parse_invite(prompt("\nPaste your invite code: "))
+            break
+        except ValueError:
+            print("That doesn't look like an invite code. Copy the whole thing from JP's message.")
+    name = prompt("Your name, as the others will see it: ").strip() or user
+
+    write_config(os.path.join(here, "config.json"), {
+        "user": user, "displayName": name, "tz": "local",
+        "endpoint": DEFAULT_ENDPOINT, "token": token, "collection": collection,
+    })
+
+    print("\nSending your stats...")
+    if publish_main([]) != 0:
+        print("\nCouldn't send your stats (the reason is just above).\n"
+              "Check you're online and the invite code is exactly what JP sent,\n"
+              "then run setup again. Send JP a screenshot if it keeps happening.")
+        return 1
+    print("✓ Published - you're on the dashboard")
+
+    if run_task(write_task_script(here, sys.executable)) != 0:
+        print("\nCouldn't turn on auto-sync. Send JP a screenshot of this window.")
+        return 1
+    print("✓ Auto-sync on\n\nAll done. Your stats update a minute or two after you close Anki.")
+    return 0
+
+
 def write_config(path, cfg):
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, indent=2)
@@ -136,6 +195,9 @@ def write_config(path, cfg):
 
 def main(argv=None):
     here = os.path.dirname(os.path.abspath(__file__))
+    if "--easy" in (sys.argv[1:] if argv is None else argv):
+        import publish
+        return easy_setup(here, input, find_collections(), publish.main, run_task_script)
     blocked = protected_folder(here) if sys.platform == "darwin" else None
     if blocked:
         print("macOS won't let the background publisher read files in your %s folder.\n"

@@ -132,5 +132,78 @@ class TestWriteConfig(unittest.TestCase):
             self.assertEqual(json.load(fh)["user"], "jp")
 
 
+TOKEN = "0123456789abcdef0123456789abcdef"
+
+
+class TestParseInvite(unittest.TestCase):
+    def test_splits_user_and_token(self):
+        self.assertEqual(S.parse_invite("harry-" + TOKEN), ("harry", TOKEN))
+
+    def test_forgives_stray_whitespace_from_pasting(self):
+        self.assertEqual(S.parse_invite("  harry-%s \n" % TOKEN), ("harry", TOKEN))
+
+    def test_rejects_anything_else(self):
+        for bad in ("", TOKEN, "harry", "harry-", "harry-" + TOKEN[:-1], "Harry-" + TOKEN):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                S.parse_invite(bad)
+
+
+class TestEasySetup(unittest.TestCase):
+    def run_easy(self, answers, found=("C:/anki/User 1/collection.anki2",),
+                 publish_code=0, task_code=0):
+        here = tempfile.mkdtemp()
+        prompts = []
+
+        def prompt(text):
+            prompts.append(text)
+            return answers.pop(0)
+
+        publish_main = mock.Mock(return_value=publish_code)
+        run_task = mock.Mock(return_value=task_code)
+        with mock.patch("sys.stdout"):
+            code = S.easy_setup(here, prompt, list(found), publish_main, run_task)
+        cfg_path = os.path.join(here, "config.json")
+        cfg = json.load(open(cfg_path, encoding="utf-8")) if os.path.exists(cfg_path) else None
+        return code, cfg, prompts, publish_main, run_task
+
+    def test_asks_only_for_invite_and_name_then_publishes_and_schedules(self):
+        code, cfg, prompts, publish_main, run_task = self.run_easy(["harry-" + TOKEN, "Harry"])
+        self.assertEqual(code, 0)
+        self.assertEqual(len(prompts), 2)
+        self.assertEqual(cfg, {
+            "user": "harry", "displayName": "Harry", "tz": "local",
+            "endpoint": S.DEFAULT_ENDPOINT, "token": TOKEN,
+            "collection": "C:/anki/User 1/collection.anki2",
+        })
+        publish_main.assert_called_once_with([])
+        run_task.assert_called_once()
+
+    def test_asks_again_after_a_mistyped_invite(self):
+        code, cfg, prompts, _, _ = self.run_easy(["harry", "harry-" + TOKEN, "Harry"])
+        self.assertEqual(code, 0)
+        self.assertEqual(len(prompts), 3)
+        self.assertEqual(cfg["user"], "harry")
+
+    def test_blank_name_falls_back_to_the_invite_id(self):
+        _, cfg, _, _, _ = self.run_easy(["harry-" + TOKEN, "  "])
+        self.assertEqual(cfg["displayName"], "harry")
+
+    def test_stops_without_anki_before_asking_anything(self):
+        code, cfg, prompts, publish_main, _ = self.run_easy([], found=())
+        self.assertNotEqual(code, 0)
+        self.assertEqual(prompts, [])
+        self.assertIsNone(cfg)
+        publish_main.assert_not_called()
+
+    def test_failed_publish_does_not_schedule(self):
+        code, _, _, _, run_task = self.run_easy(["harry-" + TOKEN, "Harry"], publish_code=4)
+        self.assertNotEqual(code, 0)
+        run_task.assert_not_called()
+
+    def test_failed_schedule_is_reported(self):
+        code, _, _, _, _ = self.run_easy(["harry-" + TOKEN, "Harry"], task_code=1)
+        self.assertNotEqual(code, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

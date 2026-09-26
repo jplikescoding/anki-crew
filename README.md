@@ -4,6 +4,18 @@ A shared dashboard for the three of us — who studied what, how much, and the a
 
 ## Setup
 
+### Windows, the easy way
+
+1. On GitHub, click **Code → Download ZIP**, then right-click the zip and **Extract All**.
+2. Open the extracted folder and double-click **`setup-windows.bat`**.
+3. Paste the invite code we sent you and type your name.
+
+It installs Python if you don't have it, publishes once, and turns on auto-sync. That's all.
+
+An invite code is `<user id>-<ingest token>`, e.g. `harry-<token>`, so there's nothing to mistype.
+
+### Everyone else
+
 Takes about five minutes. Python 3.9 or newer, standard library only — no `pip install`, nothing else to set up.
 
 ```bash
