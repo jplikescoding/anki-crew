@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { streakTier } from "@/lib/metrics";
 
 /* ------------------------------------------------------------------ tooltip */
@@ -7,25 +8,49 @@ import { streakTier } from "@/lib/metrics";
 /**
  * Hover or focus to explain a number. Every metric on this dashboard can be
  * asked "what does that actually mean" — the dotted rule is the invitation.
+ *
+ * Drawn on the page body at fixed coordinates, not inside the trigger: feed
+ * cards clip their overflow, and a tooltip inside one gets cut at its edge.
  */
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    // Centred over the trigger, kept 16px inside the screen (the bubble is 240px wide).
+    const x = Math.min(Math.max(r.left + r.width / 2, 136), window.innerWidth - 136);
+    setAt({ x, y: r.top });
+  };
+  const hide = () => setAt(null);
+
+  // Fixed coordinates don't follow the page, so a scroll closes it.
+  useEffect(() => {
+    if (!at) return;
+    window.addEventListener("scroll", hide, { passive: true });
+    return () => window.removeEventListener("scroll", hide);
+  }, [at]);
+
   return (
     <span
+      ref={ref}
       className="relative inline-flex"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
     >
       <span tabIndex={0} className="defined">{children}</span>
-      {open && (
+      {at && createPortal(
         <span
           role="tooltip"
-          className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-60 -translate-x-1/2
+          className="pointer-events-none fixed z-50 w-60 -translate-x-1/2 -translate-y-full
                      rounded-xl border px-3 py-2 text-left text-[11.5px] leading-relaxed font-normal
                      normal-case tracking-normal shadow-xl"
           style={{
+            left: at.x,
+            top: at.y - 8,
             background: "#12172A",
             borderColor: "var(--edge)",
             color: "var(--ink-dim)",
@@ -33,7 +58,8 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
           }}
         >
           {label}
-        </span>
+        </span>,
+        document.body,
       )}
     </span>
   );

@@ -100,6 +100,13 @@ describe("deck badge explanation", () => {
     expect(tip).toHaveTextContent("Compares Adam's card with your decks");
     for (const word of ["known", "learning", "unstudied", "not in your deck"]) expect(tip).toHaveTextContent(word);
   });
+
+  it("sits outside the card, so the card's edge can't cut it off", () => {
+    render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": "new" }} />);
+    fireEvent.mouseEnter(screen.getByTestId("deck-status-adam:1"));
+    const card = screen.getByTestId("deck-status-adam:1").closest("li")!;
+    expect(card.contains(screen.getByRole("tooltip"))).toBe(false);
+  });
 });
 
 describe("vs. my deck filter", () => {
@@ -130,6 +137,13 @@ describe("vs. my deck filter", () => {
     fireEvent.change(screen.getByTestId("filter-deck"), { target: { value: "new" } });
     fireEvent.click(screen.getByTestId("chip-jp"));
     expect(screen.queryByTestId("feed-empty")).toBeNull();
+  });
+
+  it("sits right after the person chips, not off the end of the bar", () => {
+    render(<Feed items={[adams, mine]} people={people} viewer="jp" inMyDeck={deck} />);
+    const select = screen.getByTestId("filter-deck");
+    const outcome = screen.getByTestId("outcome-all");
+    expect(select.compareDocumentPosition(outcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("stays out of the way before your deck index exists", () => {

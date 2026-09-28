@@ -89,6 +89,32 @@ export default function FeedFilters({
           );
         })}
 
+        {/* Next to the people: it compares their cards. Your own have no badge, so it hides on them. */}
+        {deckCounts && filter.person !== viewer && (
+          <select
+            data-testid="filter-deck"
+            aria-label="Compare with my deck"
+            title="Show friends' cards by where that word is in your decks."
+            value={filter.deck ?? ""}
+            onChange={(e) => set({ deck: (e.target.value || null) as DeckMatch | null })}
+            className="min-h-8 shrink-0 rounded-full border px-2.5 text-[11.5px]"
+            style={{
+              borderColor: filter.deck ? "var(--edge-lit)" : "var(--edge)",
+              background: filter.deck ? "var(--pane-lift)" : "transparent",
+              color: filter.deck ? "var(--ink)" : "var(--ink-dim)",
+            }}
+          >
+            <option value="">
+              {filter.person
+                ? `${people.find((p) => p.profile.id === filter.person)?.profile.displayName ?? filter.person}'s cards vs. my deck`
+                : "Friends' cards vs. my deck"}
+            </option>
+            {DECK_OPTIONS.filter(([value]) => deckCounts[value] > 0 || filter.deck === value).map(([value, label]) => (
+              <option key={value} value={value}>{label} ({deckCounts[value]})</option>
+            ))}
+          </select>
+        )}
+
         <span aria-hidden className="h-4 w-px shrink-0" style={{ background: "var(--edge)" }} />
 
         <div role="group" aria-label="Outcome"
@@ -132,32 +158,6 @@ export default function FeedFilters({
         <Toggle testid="filter-sentences" on={sentences} onClick={onSentences}>
           <span className="jp">例</span>&nbsp;Sentences
         </Toggle>
-
-        {/* Your own cards have no badge to compare, so there's nothing to offer on them. */}
-        {deckCounts && filter.person !== viewer && (
-          <select
-            data-testid="filter-deck"
-            aria-label="Compare with my deck"
-            title="Show friends' cards by where that word is in your decks."
-            value={filter.deck ?? ""}
-            onChange={(e) => set({ deck: (e.target.value || null) as DeckMatch | null })}
-            className="min-h-8 shrink-0 rounded-full border px-2.5 text-[11.5px]"
-            style={{
-              borderColor: filter.deck ? "var(--edge-lit)" : "var(--edge)",
-              background: filter.deck ? "var(--pane-lift)" : "transparent",
-              color: filter.deck ? "var(--ink)" : "var(--ink-dim)",
-            }}
-          >
-            <option value="">
-              {filter.person
-                ? `${people.find((p) => p.profile.id === filter.person)?.profile.displayName ?? filter.person}'s cards vs. my deck`
-                : "Friends' cards vs. my deck"}
-            </option>
-            {DECK_OPTIONS.filter(([value]) => deckCounts[value] > 0 || filter.deck === value).map(([value, label]) => (
-              <option key={value} value={value}>{label} ({deckCounts[value]})</option>
-            ))}
-          </select>
-        )}
       </div>
     </div>
   );
