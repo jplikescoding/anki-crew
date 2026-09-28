@@ -49,6 +49,13 @@ describe("PlayerCard", () => {
     expect(screen.getByTestId("card-h2h")).toHaveTextContent("This week Adam's 200 ahead — last day");
   });
 
+  it("doesn't colour your head-to-head as winning on a tie", () => {
+    render(<PlayerCard person={adam} people={[jp, adam]} viewer="jp" results={[]} onClose={vi.fn()} onFullStats={vi.fn()} />);
+    const mine = screen.getByTestId("card-h2h").querySelector("b > span") as HTMLElement;
+    expect(mine.textContent).toBe("0");
+    expect(mine.style.color).toBe("var(--ink-dim)");
+  });
+
   it("has no head-to-head on your own card, and muted trophies before a win", () => {
     show(jp);
     expect(screen.queryByTestId("card-h2h")).toBeNull();

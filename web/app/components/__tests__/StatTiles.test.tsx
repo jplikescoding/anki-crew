@@ -32,6 +32,22 @@ describe("StatTiles", () => {
     expect(screen.getByText("▲ 50% on this point last week")).toBeTruthy();
   });
 
+  it("counts the crew's week on the viewer's day, not whoever is listed first", () => {
+    // JP is on Sunday 27 Sep; Andy, listed first, is already on Monday 28 Sep.
+    const me: PersonView = {
+      ...jp,
+      meta: { ...jp.meta, todayKey: "2026-09-27" },
+      days: [day("2026-09-16", 50), day("2026-09-23", 100)],
+    };
+    const andy: PersonView = {
+      profile: { id: "andy", displayName: "Andy", tz: "Asia/Tokyo", joinedAt: 0 },
+      meta: { ...jp.meta, todayKey: "2026-09-28" },
+      days: [],
+    };
+    render(<StatTiles people={[andy, me]} viewer="jp" />);
+    expect(screen.getByText("▲ 100% on this point last week")).toBeTruthy();
+  });
+
   it("ignores a streak the publisher reported once it has lapsed", () => {
     const lapsed: PersonView = {
       ...jp,

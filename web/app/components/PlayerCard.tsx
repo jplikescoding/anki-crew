@@ -121,7 +121,7 @@ export default function PlayerCard({ person, people, viewer, results, onClose, o
             <div className="flex items-baseline justify-between">
               <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: "var(--ink-faint)" }}>You vs {name}</span>
               <b className="text-[19px]">
-                <span style={{ color: h2h.a >= h2h.b ? "var(--jade)" : "var(--ink-dim)" }}>{h2h.a}</span>
+                <span style={{ color: h2h.a > h2h.b ? "var(--jade)" : "var(--ink-dim)" }}>{h2h.a}</span>
                 <span style={{ color: "var(--ink-faint)" }}> – </span>
                 <span style={{ color: h2h.b > h2h.a ? "var(--rose)" : "var(--ink-dim)" }}>{h2h.b}</span>
               </b>

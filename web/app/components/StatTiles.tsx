@@ -21,9 +21,9 @@ function prettyDate(iso: string) {
  */
 export default function StatTiles({ people, viewer }: { people: PersonView[]; viewer: string | null }) {
   if (people.length === 0) return null;
-  const todayKey = people[0].meta.todayKey;
 
   const me = people.find((p) => p.profile.id === viewer) ?? people[0];
+  const todayKey = me.meta.todayKey;
   const best = personalBest(me.days);
   const bestRow = best ? me.days.find((d) => d.date === best.date) : undefined;
   const bestDetail = bestRow
