@@ -61,6 +61,7 @@ async function refresh() {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   window.history.replaceState({}, "", "/?key=key_jp");
   crewReplies = [];
   writeReply = ok({ ok: true });
@@ -467,6 +468,62 @@ describe("the weekly race", () => {
 
     crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: saved.look }, [50, 40]));
     await refresh();
+    expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+  });
+
+  it("keeps last week's crown and strip back until you've watched the roundup", async () => {
+    crewReplies.push(race({ results: {} }));
+    await mount();
+    expect(await screen.findByTestId("moment-pill")).toBeTruthy();
+    expect(screen.queryByTestId("week-strip")).toBeNull();
+    expect(screen.queryByTestId("crown")).toBeNull();
+    fireEvent.click(screen.getByTestId("moment-pill"));
+    fireEvent.click(screen.getByText("Close"));
+    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 39: Adam 894 · JP 88");
+    expect(within(screen.getByTestId("row-adam")).getByTestId("crown")).toBeTruthy();
+  });
+
+  it("counts the rest of the moments on the pill", async () => {
+    crewReplies.push(race({ results: {}, standing: { week: "2026-09-28", order: ["adam", "jp"] } }, [50, 40]));
+    await mount();
+    expect(await screen.findByTestId("moment-pill")).toHaveTextContent("🏆 Week 39 results are in + 1 more");
+  });
+
+  it("sweeps your row rose when you've been passed, without a chime", async () => {
+    crewReplies.push(race(
+      { results: { "2026-09-21": "adam" }, standing: { week: "2026-09-28", order: ["jp", "adam"] } },
+      [40, 50],
+    ));
+    await mount();
+    const pill = await screen.findByTestId("moment-pill");
+    expect(pill).toHaveTextContent("Adam passed you this week — 10 behind");
+    fireEvent.click(pill);
+    expect(screen.getByTestId("row-jp").className).toContain("overtaken-rose");
+    expect(playCelebration).not.toHaveBeenCalled();
+  });
+
+  const lookOn = (day: string, jp: number, adam: number) => ({
+    at: Date.UTC(2026, 8, 29, 12), day, week: "2026-09-28",
+    scores: { jp: { today: jp, week: jp, all: jp }, adam: { today: adam, week: adam, all: adam } },
+  });
+
+  it("drops a held look from another day for the one the server just returned", async () => {
+    crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: lookOn("2026-09-28", 0, 30) }, [50, 40]));
+    await mount();
+    expect(screen.queryByTestId("delta-jp")).toBeNull(); // yesterday's look says nothing about today
+    crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: lookOn("2026-09-29", 0, 30) }, [50, 40]));
+    await refresh();
+    expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+  });
+
+  it("keeps comparing against the look from before a reload of the tab", async () => {
+    crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: lookOn("2026-09-29", 0, 30) }, [50, 40]));
+    await mount();
+    expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+    const saved = competitionPosts().find((b) => b.look).look;
+    cleanup();
+    crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: saved }, [50, 40]));
+    await mount();
     expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
   });
 

@@ -21,12 +21,13 @@ import { readSeen, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
 import { FLOOR, NOTES_SEEN, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
-import type { CrewNote, CrewResponse, Engagement, FieldMap, Look, NoteCard, PersonView } from "@/lib/types";
+import type { CompetitionState, CrewNote, CrewResponse, Engagement, FieldMap, Look, NoteCard, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "notes" | "you";
 const TABS: Tab[] = ["board", "feed", "notes", "you"];
 const RANGES: Range[] = ["today", "week", "all"];
 const HINT_KEY = "anki-crew:hinted:v1";
+const LOOK_KEY = "anki-crew:look:v1";
 const BAD_LINK = "That link isn't valid. Check the key on the end of the URL, or ask JP for yours.";
 
 function todayReviews(p: PersonView): number {
@@ -59,10 +60,13 @@ export default function Page() {
 
   // What the previous visit showed, captured once so the roll-up has a floor.
   const before = useRef<Seen | null>(null);
-  // The server's copy of your previous look, held for the tab's life so a
-  // refresh -- which saves a new look -- doesn't wipe the arrows.
+  // The server's copy of your previous look, held for the tab's life (and
+  // through an F5, via sessionStorage) so a refresh -- which saves a new look
+  // -- doesn't wipe the arrows. Swapped for the server's once the day rolls.
   const look = useRef<Look | null | undefined>(undefined);
   const [results, setResults] = useState<WeekResult[]>([]);
+  // What you've been shown of the race, from the last load plus any ack since.
+  const [compState, setCompState] = useState<CompetitionState>({ results: {} });
   const [moments, setMoments] = useState<Moment[]>([]);
   const queue = useRef<Moment[]>([]);
   const [roundup, setRoundup] = useState<{ result: WeekResult; late: boolean } | null>(null);
@@ -83,10 +87,22 @@ export default function Page() {
       const now = Date.now();
       const finished = finishedResults(next.people, now);
       const state = next.competition ?? { results: {} };
-      if (look.current === undefined) look.current = state.look ?? null;
-      setResults(finished);
-      setMoments(pendingMoments(next.people, next.viewer, state, finished));
       const me = next.people.find((p) => p.profile.id === next.viewer);
+      if (look.current === undefined) {
+        try {
+          const held = sessionStorage.getItem(LOOK_KEY);
+          if (held !== null) look.current = JSON.parse(held) as Look | null;
+        } catch { /* storage blocked */ }
+      }
+      // A look from another day has nothing to say about Today, and one from
+      // another week nothing about This week: take the latest the server has.
+      if (look.current === undefined || (look.current && me && look.current.day !== me.meta.todayKey)) {
+        look.current = state.look ?? null;
+      }
+      try { sessionStorage.setItem(LOOK_KEY, JSON.stringify(look.current)); } catch { /* storage blocked */ }
+      setResults(finished);
+      setCompState(state);
+      setMoments(pendingMoments(next.people, next.viewer, state, finished));
       if (me) {
         // Best effort: a lost save only means a moment may show once more.
         void fetch(`/api/competition?key=${encodeURIComponent(key)}`, {
@@ -278,11 +294,20 @@ export default function Page() {
     if (!data) return;
     queue.current = [...moments];
     setMoments([]);
-    void send("/api/competition", ackPatch(data.people, data.viewer, results), "couldn't save that you've seen it");
+    const patch = ackPatch(data.people, data.viewer, results);
+    setCompState((s) => ({ ...s, results: { ...s.results, ...patch.results } }));
+    void send("/api/competition", patch, "couldn't save that you've seen it");
     playNext();
   }, [data, moments, results, send, playNext]);
 
-  const cardContext = useMemo(() => ({ open: setCardFor, champion: champion(results) }), [results]);
+  // Everything but the roundup waits for it: until the latest week has been
+  // shown, the crown, strip and trophies stay as they were before it.
+  const latest = results[results.length - 1];
+  const shown = useMemo(
+    () => (latest && compState.results[latest.week] === undefined ? results.slice(0, -1) : results),
+    [results, latest, compState],
+  );
+  const cardContext = useMemo(() => ({ open: setCardFor, champion: champion(shown) }), [shown]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -448,12 +473,12 @@ export default function Page() {
                 </button>
               ))}
             </div>
-            {results.length > 0 && (
+            {shown.length > 0 && (
               <WeekStrip
-                result={results[results.length - 1]}
-                history={results}
+                result={shown[shown.length - 1]}
+                history={shown}
                 people={data.people}
-                onReplay={() => setRoundup({ result: results[results.length - 1], late: false })}
+                onReplay={() => setRoundup({ result: shown[shown.length - 1], late: false })}
               />
             )}
           </div>
@@ -464,7 +489,7 @@ export default function Page() {
               range={range}
               seen={seenTotals}
               look={look.current ?? null}
-              champion={champion(results)}
+              champion={champion(shown)}
               celebrate={celebrate}
               onSelect={setCardFor}
             />
@@ -532,7 +557,7 @@ export default function Page() {
                 }}
               >
                 {p.profile.displayName}
-                {champion(results) === p.profile.id && " 👑"}
+                {champion(shown) === p.profile.id && " 👑"}
               </button>
             ))}
           </div>
@@ -567,7 +592,7 @@ export default function Page() {
               onSave={saveFieldMap}
             />
           )}
-          <PersonPanel person={selected} items={data.feed} fieldMaps={data.fieldMaps?.[selected.profile.id]} results={results} />
+          <PersonPanel person={selected} items={data.feed} fieldMaps={data.fieldMaps?.[selected.profile.id]} results={shown} />
         </>
       )}
 
@@ -632,7 +657,7 @@ export default function Page() {
             person={p}
             people={data.people}
             viewer={data.viewer}
-            results={results}
+            results={shown}
             onClose={() => setCardFor(null)}
             onFullStats={() => { setWho(p.profile.id); setTab("you"); setCardFor(null); }}
           />
