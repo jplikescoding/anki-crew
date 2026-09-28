@@ -146,6 +146,37 @@ body {
 }
 .card-rise { animation: card-rise 360ms cubic-bezier(.22,.8,.3,1) both; }
 
+/* The roundup plays in three beats: crown and number, podium, story. */
+@keyframes beat-drop {
+  from { opacity: 0; transform: translateY(-18px) scale(.9); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes beat-rise {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes beat-fade {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.beat-1 { animation: beat-drop 520ms cubic-bezier(.22,.8,.3,1) 120ms both; }
+.beat-2 { transform-origin: bottom; animation: beat-rise 620ms cubic-bezier(.22,.8,.3,1) 700ms both; }
+.beat-3 { animation: beat-fade 520ms ease-out 1300ms both; }
+
+/* Slow gold rays behind the winner. */
+@keyframes rays-turn { to { transform: rotate(360deg); } }
+.roundup-rays {
+  position: absolute; left: 50%; top: 120px; width: 460px; height: 460px; margin: -230px 0 0 -230px;
+  border-radius: 999px; pointer-events: none;
+  background: conic-gradient(from 0deg,
+    transparent 0 8deg, rgba(251,191,36,.10) 8deg 14deg, transparent 14deg 30deg,
+    rgba(251,191,36,.08) 30deg 36deg, transparent 36deg 52deg, rgba(251,191,36,.10) 52deg 58deg,
+    transparent 58deg 90deg, rgba(251,191,36,.08) 90deg 96deg, transparent 96deg 180deg,
+    rgba(251,191,36,.10) 180deg 186deg, transparent 186deg 270deg, rgba(251,191,36,.08) 270deg 276deg,
+    transparent 276deg 360deg);
+  animation: rays-turn 40s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
