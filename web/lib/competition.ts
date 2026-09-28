@@ -4,7 +4,7 @@ import { currentDayKey, rankBy, shiftDays, weekCards, weekStart } from "@/lib/me
 export { weekCards };
 import type { PersonView } from "@/lib/types";
 
-/** Week 39 of 2026, the week the crew started. Earlier weeks never count. */
+/** Week 1: the week the crew started (21 Sep 2026). Earlier weeks never count. */
 export const SEASON_START = "2026-09-21";
 const SEASON_END = shiftDays(SEASON_START, 6);
 
@@ -20,20 +20,23 @@ export type TileCopy = { value: string; sub: string; earned: boolean };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** ISO week number of a Monday: the week belongs to the year its Thursday is in. */
-export function isoWeek(monday: string): number {
-  const thursday = new Date(`${shiftDays(monday, 3)}T00:00:00Z`);
-  const jan1 = Date.UTC(thursday.getUTCFullYear(), 0, 1);
-  return Math.floor((thursday.getTime() - jan1) / 86_400_000 / 7) + 1;
+/**
+ * A Monday's week number counted from the crew's first week, which is Week 1.
+ * Calendar week numbers made the first week read "Week 39", as if the crew
+ * had been at it for most of a year.
+ */
+export function crewWeek(monday: string): number {
+  const days = (Date.parse(`${monday}T00:00:00Z`) - Date.parse(`${SEASON_START}T00:00:00Z`)) / 86_400_000;
+  return Math.round(days / 7) + 1;
 }
 
-/** "Week 40 · 28 Sep – 4 Oct" */
+/** "Week 2 · 28 Sep – 4 Oct" */
 export function weekLabel(monday: string): string {
   const short = (key: string) => {
     const d = new Date(`${key}T00:00:00Z`);
     return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
   };
-  return `Week ${isoWeek(monday)} · ${short(monday)} – ${short(shiftDays(monday, 6))}`;
+  return `Week ${crewWeek(monday)} · ${short(monday)} – ${short(shiftDays(monday, 6))}`;
 }
 
 function knownZone(tz: string): boolean {
@@ -58,7 +61,7 @@ function joinDay(p: PersonView): string {
   return currentDayKey(knownZone(p.profile.tz) ? p.profile.tz : "UTC", "", p.profile.joinedAt);
 }
 
-/** Week 39 for founders; for anyone else, the Monday after the week they joined. */
+/** Week 1 for founders; for anyone else, the Monday after the week they joined. */
 export function firstWeek(p: PersonView): string {
   const joined = joinDay(p);
   return joined <= SEASON_END ? SEASON_START : shiftDays(weekStart(joined), 7);

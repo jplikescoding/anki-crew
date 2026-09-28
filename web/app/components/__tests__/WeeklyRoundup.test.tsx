@@ -25,7 +25,7 @@ const W40: WeekResult = { week: "2026-09-28", standings: [{ id: "adam", cards: 1
 describe("WeeklyRoundup", () => {
   it("tells the week's story with your head-to-head", () => {
     render(<WeeklyRoundup result={W40} history={[W39, W40]} people={[jp, adam]} viewer="jp" onClose={vi.fn()} />);
-    expect(screen.getByText("Week 40 · 28 Sep – 4 Oct")).toBeTruthy();
+    expect(screen.getByText("Week 2 · 28 Sep – 4 Oct")).toBeTruthy();
     expect(screen.getByTestId("roundup-headline")).toHaveTextContent("Adam holds off JP by 213 to go back-to-back");
     expect(screen.getByTestId("roundup-swing")).toHaveTextContent("Thursday swung it — Adam's 1,284 was the biggest day of the week.");
     expect(screen.getByTestId("roundup-run")).toHaveTextContent("🔥 2 weeks in a row");
@@ -63,7 +63,7 @@ describe("WeekStrip", () => {
   it("sums up the latest week and replays it", () => {
     const onReplay = vi.fn();
     render(<WeekStrip result={W40} history={[W39, W40]} people={[jp, adam]} onReplay={onReplay} />);
-    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 40: Adam 1,284 · JP 1,071");
+    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 2: Adam 1,284 · JP 1,071");
     expect(screen.getByTestId("week-strip")).toHaveTextContent("🔥 2");
     fireEvent.click(screen.getByTestId("week-strip"));
     expect(onReplay).toHaveBeenCalled();
@@ -74,7 +74,7 @@ describe("MomentPill", () => {
   it("shows the first headline and how many more", () => {
     const onPlay = vi.fn();
     render(<MomentPill moments={[{ kind: "results", result: W40 }, { kind: "passed", ids: ["adam"] }]} people={[jp, adam]} viewer="jp" onPlay={onPlay} />);
-    expect(screen.getByTestId("moment-pill")).toHaveTextContent("🏆 Week 40 results are in + 1 more");
+    expect(screen.getByTestId("moment-pill")).toHaveTextContent("🏆 Week 2 results are in + 1 more");
     fireEvent.click(screen.getByTestId("moment-pill"));
     expect(onPlay).toHaveBeenCalled();
   });

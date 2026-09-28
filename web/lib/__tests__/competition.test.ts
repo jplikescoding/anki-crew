@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  champion, competesIn, finishedResults, firstWeek, headToHead, isFinal, isoWeek, trophies, trophyCopy,
+  champion, competesIn, crewWeek, finishedResults, firstWeek, headToHead, isFinal, trophies, trophyCopy,
   weekLabel, weekResult, type WeekResult,
 } from "@/lib/competition";
 import type { DayRow, PersonView } from "@/lib/types";
@@ -25,16 +25,16 @@ const W40 = "2026-09-28";
 const result = (week: string, standings: [string, number][], winner: string | null, podium: string[] | null = null): WeekResult =>
   ({ week, standings: standings.map(([id, cards]) => ({ id, cards })), winner, podium });
 
-describe("isoWeek and weekLabel", () => {
-  it("numbers weeks the ISO way", () => {
-    expect(isoWeek(W39)).toBe(39);
-    expect(isoWeek(W40)).toBe(40);
-    expect(isoWeek("2025-12-29")).toBe(1);
-    expect(isoWeek("2026-12-28")).toBe(53);
+describe("crewWeek and weekLabel", () => {
+  it("numbers weeks from the crew's first week, straight across a new year", () => {
+    expect(crewWeek(W39)).toBe(1);
+    expect(crewWeek(W40)).toBe(2);
+    expect(crewWeek("2026-12-28")).toBe(15);
+    expect(crewWeek("2027-01-04")).toBe(16);
   });
 
   it("labels a week with its range", () => {
-    expect(weekLabel(W40)).toBe("Week 40 · 28 Sep – 4 Oct");
+    expect(weekLabel(W40)).toBe("Week 2 · 28 Sep – 4 Oct");
   });
 });
 

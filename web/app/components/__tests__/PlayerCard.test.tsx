@@ -27,7 +27,7 @@ const show = (who: PersonView, viewer = "jp", onFullStats = vi.fn(), onClose = v
 describe("PlayerCard", () => {
   it("shows the champion's title, trophies and history", () => {
     show(adam);
-    expect(screen.getByText("👑 Champion · week 39")).toBeTruthy();
+    expect(screen.getByText("👑 Champion · week 1")).toBeTruthy();
     expect(screen.getByTestId("card-weeks-won")).toHaveTextContent("🏆 1");
     expect(screen.getByTestId("card-run")).toHaveTextContent("🔥 1");
     expect(screen.getByText(/Studying since Mar 2024/)).toBeTruthy();

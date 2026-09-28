@@ -1,6 +1,6 @@
 // What happened since you last looked, and the bookkeeping that makes each
 // moment play once. Pure: the page decides when to show and when to save.
-import { competesIn, isoWeek, type WeekResult } from "@/lib/competition";
+import { competesIn, crewWeek, type WeekResult } from "@/lib/competition";
 import { rankBy, scoreNow, weekStart } from "@/lib/metrics";
 import type { CompetitionState, PersonView, Standing } from "@/lib/types";
 
@@ -91,11 +91,11 @@ export function momentHeadline(m: Moment, people: PersonView[], viewer: string |
   const list = (ids: string[]) => ids.map(name).join(" and ");
   switch (m.kind) {
     case "results":
-      return `🏆 Week ${isoWeek(m.result.week)} results are in`;
+      return `🏆 Week ${crewWeek(m.result.week)} results are in`;
     case "late":
       return m.result.winner
-        ? `Late sync: ${name(m.result.winner)} took week ${isoWeek(m.result.week)} after all`
-        : `Late sync: week ${isoWeek(m.result.week)} ended level after all`;
+        ? `Late sync: ${name(m.result.winner)} took week ${crewWeek(m.result.week)} after all`
+        : `Late sync: week ${crewWeek(m.result.week)} ended level after all`;
     case "passed":
       return `⚡ You passed ${list(m.ids)} this week`;
     case "passedBy": {

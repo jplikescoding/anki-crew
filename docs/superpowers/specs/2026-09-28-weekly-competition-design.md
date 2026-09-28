@@ -44,8 +44,11 @@ Laptop first; everyone but maybe Harry uses a laptop.
 
 - A week is **Monday–Sunday in each person's own Anki days** (their timezone,
   4am rollover — the same day keys `DayRow.date` already uses).
-- Weeks are named by ISO week number of their Monday: **Week 40** =
-  28 Sep – 4 Oct 2026. Shown with its range, e.g. "Week 40 · 28 Sep – 4 Oct".
+- Weeks are numbered from the crew's first week (changed 2026-09-28 from ISO
+  numbers, which made the first week read "Week 39"): **Week 1** = 21–27 Sep,
+  **Week 2** = 28 Sep – 4 Oct 2026. Shown with its range, e.g.
+  "Week 2 · 28 Sep – 4 Oct". The rest of this spec still says Week 39/40 for
+  those two weeks.
 - The board's **Week** range becomes **This week**: Monday so far, not a
   rolling 7 days. `weekStart(todayKey)` returns that day's Monday.
 - The crew tile "Crew this week" compares this week so far against the **same

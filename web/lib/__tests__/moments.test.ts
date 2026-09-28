@@ -111,8 +111,8 @@ describe("patches", () => {
 
 describe("momentHeadline", () => {
   it("names what happened", () => {
-    expect(momentHeadline({ kind: "results", result: W39 }, [jp, adam], "jp")).toBe("🏆 Week 39 results are in");
-    expect(momentHeadline({ kind: "late", result: W39 }, [jp, adam], "jp")).toBe("Late sync: Adam took week 39 after all");
+    expect(momentHeadline({ kind: "results", result: W39 }, [jp, adam], "jp")).toBe("🏆 Week 1 results are in");
+    expect(momentHeadline({ kind: "late", result: W39 }, [jp, adam], "jp")).toBe("Late sync: Adam took week 1 after all");
     expect(momentHeadline({ kind: "passed", ids: ["adam"] }, [jp, adam], "jp")).toBe("⚡ You passed Adam this week");
     expect(momentHeadline({ kind: "passedBy", ids: ["jp"] }, [jp, adam], "adam")).toBe("JP passed you this week — 10 behind");
   });

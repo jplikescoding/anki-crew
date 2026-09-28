@@ -426,7 +426,7 @@ describe("the weekly race", () => {
     crewReplies.push(race({ results: {} }));
     await mount();
     const pill = await screen.findByTestId("moment-pill");
-    expect(pill).toHaveTextContent("🏆 Week 39 results are in");
+    expect(pill).toHaveTextContent("🏆 Week 1 results are in");
     fireEvent.click(pill);
     expect(screen.getByTestId("roundup-headline")).toHaveTextContent("Adam cruises past JP by 806 for a first ever win");
     expect(competitionPosts().some((b) => b.results?.["2026-09-21"] === "adam")).toBe(true);
@@ -437,7 +437,7 @@ describe("the weekly race", () => {
     crewReplies.push(race({ results: { "2026-09-21": "adam" } }));
     await mount();
     expect(screen.queryByTestId("moment-pill")).toBeNull();
-    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 39: Adam 894 · JP 88");
+    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 1: Adam 894 · JP 88");
     expect(within(screen.getByTestId("row-adam")).getByTestId("crown")).toBeTruthy();
   });
 
@@ -479,14 +479,14 @@ describe("the weekly race", () => {
     expect(screen.queryByTestId("crown")).toBeNull();
     fireEvent.click(screen.getByTestId("moment-pill"));
     fireEvent.click(screen.getByText("Close"));
-    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 39: Adam 894 · JP 88");
+    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 1: Adam 894 · JP 88");
     expect(within(screen.getByTestId("row-adam")).getByTestId("crown")).toBeTruthy();
   });
 
   it("counts the rest of the moments on the pill", async () => {
     crewReplies.push(race({ results: {}, standing: { week: "2026-09-28", order: ["adam", "jp"] } }, [50, 40]));
     await mount();
-    expect(await screen.findByTestId("moment-pill")).toHaveTextContent("🏆 Week 39 results are in + 1 more");
+    expect(await screen.findByTestId("moment-pill")).toHaveTextContent("🏆 Week 1 results are in + 1 more");
   });
 
   it("sweeps your row rose when you've been passed, without a chime", async () => {

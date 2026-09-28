@@ -1,5 +1,5 @@
 "use client";
-import { isoWeek, trophies, type WeekResult } from "@/lib/competition";
+import { crewWeek, trophies, type WeekResult } from "@/lib/competition";
 import type { PersonView } from "@/lib/types";
 
 /** Last week's result, all week, one line. Click to watch the roundup again. */
@@ -21,7 +21,7 @@ export default function WeekStrip({ result, history, people, onReplay }: {
       style={{ background: "linear-gradient(90deg,rgba(251,191,36,.12),rgba(251,191,36,.02))", borderColor: "rgba(251,191,36,.25)" }}
     >
       <span>{result.winner ? "👑" : "🤝"}</span>
-      <span className="truncate"><b>Week {isoWeek(result.week)}:</b> {scores}</span>
+      <span className="truncate"><b>Week {crewWeek(result.week)}:</b> {scores}</span>
       {run >= 2 && <span style={{ color: "var(--gold)" }}>🔥 {run}</span>}
       <span className="shrink-0" style={{ color: "var(--ink-faint)" }}>replay ▸</span>
     </button>

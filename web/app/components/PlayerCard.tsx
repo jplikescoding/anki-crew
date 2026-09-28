@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Avatar } from "@/app/components/Avatar";
 import { tzTag } from "@/app/components/Board";
 import { StreakStar } from "@/app/components/primitives";
-import { champion, headToHead, isoWeek, trophies, trophyCopy, type TileCopy, type WeekResult } from "@/lib/competition";
+import { champion, headToHead, crewWeek, trophies, trophyCopy, type TileCopy, type WeekResult } from "@/lib/competition";
 import { currentStreak, daysLeftInWeek, personalBest, scoreNow } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
 
@@ -95,7 +95,7 @@ export default function PlayerCard({ person, people, viewer, results, onClose, o
         >
           {isChamp && lastWeek && (
             <span className="absolute left-4 top-3 text-[10px] uppercase tracking-[.16em]" style={{ color: "var(--gold)" }}>
-              👑 Champion · week {isoWeek(lastWeek.week)}
+              👑 Champion · week {crewWeek(lastWeek.week)}
             </span>
           )}
           <button onClick={onClose} aria-label="Close" className="absolute right-3 top-2 px-1 text-[14px]" style={{ color: "var(--ink-faint)" }}>✕</button>
