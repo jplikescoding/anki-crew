@@ -33,7 +33,7 @@ exist.
   `<select>` (same look as the card setup selects) reading `Everyone` by
   default, listing only people who have written at least one note, with counts
   — `Adam (3)`. Crew members who haven't joined or written anything take no
-  space. Hidden while there are no notes. Session-only; resets to Everyone.
+  space. Shown only when two or more people have written notes (one author leaves nothing to filter). Session-only; resets to Everyone.
   If the chosen person's notes all get deleted, it falls back to Everyone.
 - `+ New note` opens a text box at the top of the list.
 - List is newest first (by created time). Each note: author avatar, name,
