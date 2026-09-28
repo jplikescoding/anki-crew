@@ -70,13 +70,16 @@ function trackFor(person: PersonView): TrackDay[] {
 }
 
 export default function Board({
-  people, viewer, range, seen, justPassed, look, onSelect,
+  people, viewer, range, seen, champion, celebrate, look, onSelect,
 }: {
   people: PersonView[];
   viewer: string | null;
   range: Range;
   seen?: Record<string, number>;
-  justPassed?: string | null;
+  /** Last finished week's winner; wears the crown until someone takes it. */
+  champion?: string | null;
+  /** The row playing a pass moment right now. */
+  celebrate?: { id: string; tone: "gold" | "rose" } | null;
   /** What you saw on your previous visit; arrows compare against it. */
   look?: Look | null;
   /** Opens that person's panel. A row that reacts to a click should go somewhere. */
@@ -124,7 +127,7 @@ export default function Board({
           const stale = Date.now() - p.meta.lastPublishAt > STALE_AFTER_MS;
           const delta = deltas[id] ?? 0;
           const move = moves[id];
-          const passed = justPassed && p.profile.displayName === justPassed;
+          const sweep = celebrate?.id === id ? (celebrate.tone === "gold" ? "overtaken" : "overtaken-rose") : "";
 
           return (
             <li key={id}>
@@ -134,7 +137,7 @@ export default function Board({
                 onClick={() => onSelect?.(id)}
                 className={`lane-enter relative grid items-center gap-x-3 gap-y-1 rounded-[14px] border px-4 py-3
                             transition-[transform,border-color] duration-150 active:scale-[.992]
-                            ${onSelect ? "cursor-pointer" : ""} ${passed ? "overtaken" : ""}`}
+                            ${onSelect ? "cursor-pointer" : ""} ${sweep}`}
                 style={{
                   gridTemplateColumns: "26px minmax(0,1fr) auto",
                   background: lead ? "var(--pane-lift)" : "var(--pane)",
@@ -188,6 +191,9 @@ export default function Board({
                     >
                       {p.profile.displayName}
                     </button>
+                    {champion === id && (
+                      <span data-testid="crown" title="Won last week" className="text-[12px]">👑</span>
+                    )}
                     {you && (
                       <span
                         className="rounded-full px-2 py-[1px] text-[9.5px] font-medium"
@@ -241,9 +247,7 @@ export default function Board({
               {/* One line, on your row only, about you. */}
               {you && gap && (
                 <p data-testid="gap-line" className="px-5 pt-1.5 text-[11.5px]" style={{ color: "var(--ink-dim)" }}>
-                  {justPassed ? (
-                    <>You passed <b style={{ color: "var(--violet-soft)" }}>{justPassed}</b> while you were away — {gap.amount} ahead now.</>
-                  ) : gap.kind === "leading" ? (
+                  {gap.kind === "leading" ? (
                     <>Leading <b style={{ color: "var(--ink)" }}>{gap.name}</b> by {gap.amount}{weekTail}.</>
                   ) : gap.amount === 0 ? (
                     <>Level with <b style={{ color: "var(--ink)" }}>{gap.name}</b>. One card breaks the tie{weekTail}.</>

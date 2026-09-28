@@ -108,4 +108,17 @@ describe("Board", () => {
     render(<Board people={[jp, andy]} viewer="jp" range="week" />);
     expect(screen.getByTestId("gap-line")).toHaveTextContent("60 behind Andy · 6 days left");
   });
+
+  it("crowns the champion", () => {
+    render(<Board people={[JP, ANDY]} viewer="jp" range="today" champion="andy" />);
+    expect(within(screen.getByTestId("row-andy")).getByTestId("crown")).toBeTruthy();
+    expect(within(screen.getByTestId("row-jp")).queryByTestId("crown")).toBeNull();
+  });
+
+  it("sweeps your row gold for a pass and rose for being passed", () => {
+    const { rerender } = render(<Board people={[JP, ANDY]} viewer="jp" range="today" celebrate={{ id: "jp", tone: "gold" }} />);
+    expect(screen.getByTestId("row-jp").className).toContain("overtaken");
+    rerender(<Board people={[JP, ANDY]} viewer="jp" range="today" celebrate={{ id: "jp", tone: "rose" }} />);
+    expect(screen.getByTestId("row-jp").className).toContain("overtaken-rose");
+  });
 });

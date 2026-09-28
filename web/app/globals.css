@@ -132,6 +132,13 @@ body {
   animation: overtake-sweep 1100ms ease-out 1;
 }
 
+/* Being passed: the same sweep, in the colour of lost ground. */
+.overtaken-rose {
+  background-image: linear-gradient(100deg, transparent 20%, rgba(251,113,133,.20) 50%, transparent 80%);
+  background-size: 220% 100%;
+  animation: overtake-sweep 1100ms ease-out 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

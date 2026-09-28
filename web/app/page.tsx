@@ -401,7 +401,6 @@ export default function Page() {
               viewer={data.viewer}
               range={range}
               seen={seenTotals}
-              justPassed={passed}
               onSelect={(id) => { setWho(id); setTab("you"); }}
             />
           </div>
