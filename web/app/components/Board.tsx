@@ -1,7 +1,7 @@
 "use client";
 import {
   crewDailyTotals, currentStreak, daysLeftInWeek, gapToNext, momentum, rankBy, rankDeltas, retention,
-  scoreNow, shiftDays, sinceWhen, totals, weekStart, windowFrom,
+  scoreNow, shiftDays, sinceWhen, totals, weekRows, weekStart,
 } from "@/lib/metrics";
 import type { Momentum, Range } from "@/lib/metrics";
 import type { DayRow, Look, PersonView } from "@/lib/types";
@@ -18,10 +18,11 @@ const CARDS_HELP =
   "Cards reviewed — every card Anki put in front of you, counted once per review. Filtered and crammed sessions don't count, so nobody can pad it.";
 const STREAK_HELP_COL = "Consecutive days with at least one review. The star changes at 3, 7, 14, 30 and 100 days.";
 
-function daysFor(person: PersonView, range: Range): DayRow[] {
+/** Today is their own day; This week is the viewer's week, as scoreNow scores it. */
+function daysFor(person: PersonView, range: Range, viewerDay: string): DayRow[] {
   if (range === "all") return person.days;
   if (range === "today") return person.days.filter((d) => d.date === person.meta.todayKey);
-  return windowFrom(person.days, weekStart(person.meta.todayKey));
+  return weekRows(person.days, weekStart(viewerDay));
 }
 
 /**
@@ -104,7 +105,7 @@ export default function Board({
   const home = people.find((p) => p.profile.id === viewer) ?? people[0];
   const homeTag = tzTag(home.profile.tz, home.meta.todayKey);
   const viewerDay = home.meta.todayKey;
-  const score = (p: PersonView) => scoreNow(p, range);
+  const score = (p: PersonView) => scoreNow(p, range, viewerDay);
   const ranked = rankBy(people, score);
   const deltas = rankDeltas(people, range, look ?? null, viewerDay);
   const moves = momentum(people, range, look ?? null, viewerDay);
@@ -119,7 +120,7 @@ export default function Board({
       <ol className="space-y-2 px-3">
         {ranked.map((p, i) => {
           const id = p.profile.id;
-          const scoped = daysFor(p, range);
+          const scoped = daysFor(p, range, viewerDay);
           const sums = totals(scoped);
           const ret = retention(scoped);
           const you = id === viewer;

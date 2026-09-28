@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  rankDeltas, momentum, currentDayKey, gapToNext, streakTier, personalBest, crewDailyTotals, STREAK_TIERS,
+  rankDeltas, momentum, lookFrom, currentDayKey, gapToNext, streakTier, personalBest, crewDailyTotals, STREAK_TIERS,
   currentStreak, bestStreak, daysLeftInWeek, sinceWhen, weekStart,
 } from "@/lib/metrics";
 import type { DayRow, Look, LookScores, PersonView } from "@/lib/types";
@@ -60,6 +60,18 @@ describe("rankDeltas", () => {
   it("ranks all time against the look's totals", () => {
     expect(rankDeltas([jp, pete], "all", look({ jp: { all: 1 }, peter: { all: 2 } }, YESTERDAY), TODAY))
       .toEqual({ jp: 1, peter: -1 });
+  });
+});
+
+describe("lookFrom", () => {
+  it("scores this week over the viewer's week, even for someone already in the next one", () => {
+    const jp = person("jp", "JP", [day("2026-10-01", 300)]);
+    const ahead = person("adam", "Adam", [day("2026-09-30", 500), day("2026-10-05", 3)]);
+    ahead.meta = { ...ahead.meta, todayKey: "2026-10-05" };
+    const l = lookFrom([jp, ahead], "2026-10-04", 0);
+    expect(l.week).toBe("2026-09-28");
+    expect(l.scores.adam).toEqual({ today: 3, week: 500, all: 503 });
+    expect(l.scores.jp.week).toBe(300);
   });
 });
 

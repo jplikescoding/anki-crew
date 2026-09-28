@@ -60,7 +60,7 @@ export default function PlayerCard({ person, people, viewer, results, onClose, o
 
   let race = "";
   if (me) {
-    const diff = scoreNow(me, "week") - scoreNow(person, "week");
+    const diff = scoreNow(me, "week", me.meta.todayKey) - scoreNow(person, "week", me.meta.todayKey);
     const left = daysLeftInWeek(me.meta.todayKey);
     const tail = left === 0 ? "last day" : `${left} day${left === 1 ? "" : "s"} left`;
     race = diff > 0 ? `This week you're ${diff.toLocaleString()} ahead — ${tail}`

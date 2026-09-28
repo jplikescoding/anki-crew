@@ -56,6 +56,17 @@ describe("pendingMoments", () => {
     expect(pendingMoments(mon, "jp", was, [W39])).toEqual([]);
   });
 
+  it("scores this week on the viewer's week across the Monday 4am boundary", () => {
+    // Mon 5 Oct 09:00Z: JP in New York is on Monday, Adam in LA still on Sunday.
+    // JP's 500 in week 40 still count on Adam's board; the 3 from Monday don't.
+    const jpMon = { ...person("jp", "JP", [day("2026-09-30", 500), day("2026-10-05", 3)], "2026-10-05") };
+    const adamLA = person("adam", "Adam", [day("2026-10-01", 300)], "2026-10-04");
+    adamLA.profile.tz = "America/Los_Angeles";
+    const was = state({ results: { "2026-09-21": "adam" }, standing: { week: "2026-09-28", order: ["jp", "adam"] } });
+    expect(standingNow([jpMon, adamLA], "2026-10-04")).toEqual({ week: "2026-09-28", order: ["jp", "adam"] });
+    expect(pendingMoments([jpMon, adamLA], "adam", was, [W39])).toEqual([]);
+  });
+
   it("has nothing for a viewer who isn't on the board", () => {
     expect(pendingMoments([jp, adam], null, state(), [W39])).toEqual([]);
   });

@@ -66,6 +66,19 @@ describe("Board", () => {
     expect(within(screen.getByTestId("row-jp")).getByTestId("reviews").textContent).toBe("43");
   });
 
+  it("counts a friend's week on the viewer's week after their own has rolled over", () => {
+    // JP is still on Sunday 4 Oct; Andy is already on Monday 5 Oct.
+    const jp = { ...person("jp", "JP", "America/Los_Angeles", [day("2026-10-01", { reviews: 300 })]) };
+    jp.meta = { ...jp.meta, todayKey: "2026-10-04" };
+    const andy = person("andy", "Andy", "America/New_York", [
+      day("2026-09-30", { reviews: 500, minutes: 50 }), day("2026-10-05", { reviews: 3, minutes: 1 })]);
+    andy.meta = { ...andy.meta, todayKey: "2026-10-05" };
+    render(<Board people={[jp, andy]} viewer="jp" range="week" />);
+    expect(screen.getAllByTestId("board-name").map((n) => n.textContent)).toEqual(["Andy", "JP"]);
+    expect(within(screen.getByTestId("row-andy")).getByTestId("reviews").textContent).toBe("500");
+    expect(within(screen.getByTestId("row-andy")).getByText("50 min")).toBeTruthy();
+  });
+
   it("renders an empty state when nobody has published", () => {
     render(<Board people={[]} viewer={null} range="today" />);
     expect(screen.getByTestId("board-empty")).toBeTruthy();

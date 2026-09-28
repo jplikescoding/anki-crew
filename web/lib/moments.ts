@@ -17,7 +17,7 @@ const isMonday = (day: string) => new Date(`${day}T00:00:00Z`).getUTCDay() === 1
 export function standingNow(people: PersonView[], viewerDay: string): Standing {
   const week = weekStart(viewerDay);
   const racing = people.filter((p) => competesIn(p, week));
-  return { week, order: rankBy(racing, (p) => scoreNow(p, "week")).map((p) => p.profile.id) };
+  return { week, order: rankBy(racing, (p) => scoreNow(p, "week", viewerDay)).map((p) => p.profile.id) };
 }
 
 /**
@@ -100,8 +100,9 @@ export function momentHeadline(m: Moment, people: PersonView[], viewer: string |
       return `⚡ You passed ${list(m.ids)} this week`;
     case "passedBy": {
       const me = viewer ? byId.get(viewer) : undefined;
-      const top = Math.max(...m.ids.map((id) => { const p = byId.get(id); return p ? scoreNow(p, "week") : 0; }));
-      const gap = top - (me ? scoreNow(me, "week") : 0);
+      const day = me?.meta.todayKey ?? "";
+      const top = Math.max(...m.ids.map((id) => { const p = byId.get(id); return p ? scoreNow(p, "week", day) : 0; }));
+      const gap = top - (me ? scoreNow(me, "week", day) : 0);
       return `${list(m.ids)} passed you this week — ${gap.toLocaleString("en-US")} behind`;
     }
   }

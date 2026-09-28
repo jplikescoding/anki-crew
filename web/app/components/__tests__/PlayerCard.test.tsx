@@ -40,6 +40,15 @@ describe("PlayerCard", () => {
     expect(screen.getByTestId("card-h2h")).toHaveTextContent("This week Adam's 12 ahead — 5 days left");
   });
 
+  it("races on your week when theirs has already rolled over", () => {
+    const me = { ...person("jp", "JP", [day("2026-10-01", 300)]) };
+    me.meta = { ...me.meta, todayKey: "2026-10-04" };
+    const them = person("adam", "Adam", [day("2026-09-30", 500), day("2026-10-05", 3)]);
+    them.meta = { ...them.meta, todayKey: "2026-10-05" };
+    render(<PlayerCard person={them} people={[me, them]} viewer="jp" results={results} onClose={vi.fn()} onFullStats={vi.fn()} />);
+    expect(screen.getByTestId("card-h2h")).toHaveTextContent("This week Adam's 200 ahead — last day");
+  });
+
   it("has no head-to-head on your own card, and muted trophies before a win", () => {
     show(jp);
     expect(screen.queryByTestId("card-h2h")).toBeNull();

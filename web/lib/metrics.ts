@@ -103,10 +103,24 @@ export type Range = "today" | "week" | "all";
 
 export type Momentum = { dir: 1 | -1; amount: number; rival: string; leading: boolean };
 
-/** A person's score on a range, as of now, on their own day. */
-export function scoreNow(person: PersonView, range: Range): number {
+/** Someone's rows in the week starting `monday`, Monday to Sunday. */
+export function weekRows(days: DayRow[], monday: string): DayRow[] {
+  const end = shiftDays(monday, 6);
+  return days.filter((d) => d.date >= monday && d.date <= end);
+}
+
+export function weekCards(p: PersonView, week: string): number {
+  return weekRows(p.days, week).reduce((s, d) => s + d.reviews, 0);
+}
+
+/**
+ * A person's score on a range, as of now. Today is their own day; This week is
+ * the viewer's week for everyone, the same window the week's result is scored
+ * on, so a friend whose Monday came first doesn't drop to their new week's cards.
+ */
+export function scoreNow(person: PersonView, range: Range, viewerDay: string): number {
   if (range === "today") return reviewsOn(person, person.meta.todayKey);
-  if (range === "week") return totals(windowFrom(person.days, weekStart(person.meta.todayKey))).reviews;
+  if (range === "week") return weekCards(person, weekStart(viewerDay));
   return totals(person.days).reviews;
 }
 
@@ -114,7 +128,9 @@ export function scoreNow(person: PersonView, range: Range): number {
 export function lookFrom(people: PersonView[], viewerDay: string, at: number): Look {
   const scores: Record<string, LookScores> = {};
   for (const p of people) {
-    scores[p.profile.id] = { today: scoreNow(p, "today"), week: scoreNow(p, "week"), all: scoreNow(p, "all") };
+    scores[p.profile.id] = {
+      today: scoreNow(p, "today", viewerDay), week: scoreNow(p, "week", viewerDay), all: scoreNow(p, "all", viewerDay),
+    };
   }
   return { at, day: viewerDay, week: weekStart(viewerDay), scores };
 }
@@ -146,7 +162,7 @@ export function rankDeltas(
   people: PersonView[], range: Range, look: Look | null, viewerDay: string,
 ): Record<string, number> {
   const then = scoresThen(look, range, viewerDay);
-  const now = ranksBy(people, (p) => scoreNow(p, range));
+  const now = ranksBy(people, (p) => scoreNow(p, range, viewerDay));
   const before = then ? ranksBy(people, then) : now;
   const out: Record<string, number> = {};
   for (const p of people) out[p.profile.id] = before[p.profile.id] - now[p.profile.id];
@@ -162,12 +178,12 @@ export function momentum(
   people: PersonView[], range: Range, look: Look | null, viewerDay: string,
 ): Record<string, Momentum | null> {
   const then = scoresThen(look, range, viewerDay);
-  const ranked = rankBy(people, (p) => scoreNow(p, range));
+  const ranked = rankBy(people, (p) => scoreNow(p, range, viewerDay));
   const out: Record<string, Momentum | null> = {};
   ranked.forEach((p, i) => {
     const rival = i === 0 ? ranked[1] : ranked[i - 1];
     if (!then || !rival) { out[p.profile.id] = null; return; }
-    const change = (scoreNow(p, range) - scoreNow(rival, range)) - (then(p) - then(rival));
+    const change = (scoreNow(p, range, viewerDay) - scoreNow(rival, range, viewerDay)) - (then(p) - then(rival));
     out[p.profile.id] = change === 0 ? null : {
       dir: change > 0 ? 1 : -1,
       amount: Math.abs(change),

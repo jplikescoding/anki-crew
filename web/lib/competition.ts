@@ -1,6 +1,7 @@
 // The weekly race. Everything here is derived from stored days on every load,
 // never frozen, so a late sync corrects a result instead of contradicting it.
-import { currentDayKey, rankBy, shiftDays, weekStart } from "@/lib/metrics";
+import { currentDayKey, rankBy, shiftDays, weekCards, weekStart } from "@/lib/metrics";
+export { weekCards };
 import type { PersonView } from "@/lib/types";
 
 /** Week 39 of 2026, the week the crew started. Earlier weeks never count. */
@@ -65,11 +66,6 @@ export function firstWeek(p: PersonView): string {
 
 export function competesIn(p: PersonView, week: string): boolean {
   return week >= SEASON_START && week >= firstWeek(p);
-}
-
-export function weekCards(p: PersonView, week: string): number {
-  const end = shiftDays(week, 6);
-  return p.days.reduce((s, d) => (d.date >= week && d.date <= end ? s + d.reviews : s), 0);
 }
 
 export function weekResult(week: string, people: PersonView[]): WeekResult | null {
