@@ -1,9 +1,10 @@
 "use client";
 import { useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { Avatar } from "@/app/components/Avatar";
+import CardNotes from "@/app/components/CardNotes";
 import { Tooltip } from "@/app/components/primitives";
 import { boldParts, plainText, type Resolved } from "@/lib/fields";
-import type { Comment, DeckStatus, Engagement, FeedItem, PersonView } from "@/lib/types";
+import type { Comment, CrewNote, DeckStatus, Engagement, FeedItem, PersonView } from "@/lib/types";
 
 export const EMOJI = ["🔥", "💀", "😂", "👏", "🎌"];
 export const MAX_COMMENT_CHARS = 280;
@@ -37,6 +38,7 @@ export default function FeedCard({
   item, byId, indexOf, engagement, viewer, canWrite, now, hidden, onToggleQuiz,
   open, onToggleThread, freshSince, draft, onDraft, onSubmit, onReact, cardRef, footer, arrived,
   card, deckStatus, sentencesOn,
+  notes = [], notesOpen = false, onToggleNotes, onAddNote, onEditNote, onDeleteNote,
 }: {
   item: FeedItem;
   byId: Map<string, PersonView>;
@@ -64,6 +66,13 @@ export default function FeedCard({
   deckStatus?: DeckStatus | "none";
   /** The feed-wide Sentences switch. */
   sentencesOn: boolean;
+  /** Notes written about this card, newest first. */
+  notes?: CrewNote[];
+  notesOpen?: boolean;
+  onToggleNotes?: () => void;
+  onAddNote?: (text: string) => void;
+  onEditNote?: (id: string, text: string) => void;
+  onDeleteNote?: (id: string) => void;
 }) {
   // This card's 例 button flips the feed-wide switch, for this card only.
   const [flipped, setFlipped] = useState(false);
@@ -192,6 +201,22 @@ export default function FeedCard({
           </button>
         )}
 
+        {(canWrite || notes.length > 0) && onToggleNotes && (
+          <button
+            data-testid={`notes-${item.id}`}
+            aria-pressed={notesOpen}
+            onClick={onToggleNotes}
+            title={notes.length ? "Notes on this card" : "Write a note about this card"}
+            className="inline-flex min-h-8 items-center rounded-full px-2 text-[12px] transition-colors"
+            style={{
+              color: notesOpen || notes.length ? "var(--ink-dim)" : "var(--ink-faint)",
+              background: notesOpen ? "var(--pane-lift)" : "transparent",
+            }}
+          >
+            📝{notes.length > 0 ? ` ${notes.length}` : ""}
+          </button>
+        )}
+
         <button
           data-testid={`thread-${item.id}`}
           onClick={onToggleThread}
@@ -263,6 +288,20 @@ export default function FeedCard({
           )}
           {footer}
         </div>
+      )}
+
+      {notesOpen && (
+        <CardNotes
+          notes={notes}
+          byId={byId}
+          indexOf={indexOf}
+          viewer={viewer}
+          canWrite={canWrite}
+          now={now}
+          onAdd={(text) => onAddNote?.(text)}
+          onEdit={(id, text) => onEditNote?.(id, text)}
+          onDelete={(id) => onDeleteNote?.(id)}
+        />
       )}
     </li>
   );

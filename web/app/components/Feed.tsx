@@ -8,7 +8,8 @@ import {
 } from "@/lib/feedView";
 import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
 import { resolveCard } from "@/lib/fields";
-import type { DeckStatus, Engagement, FeedItem, FieldMaps, PersonView } from "@/lib/types";
+import { noteCardFrom, notesByCard } from "@/lib/notes";
+import type { CrewNote, DeckStatus, Engagement, FeedItem, FieldMaps, NoteCard, PersonView } from "@/lib/types";
 
 export { EMOJI, ago } from "@/app/components/FeedCard";
 
@@ -28,6 +29,7 @@ function readSentences(): boolean {
 export default function Feed({
   items, people, engagement = {}, viewer, apiKey,
   onReact, onComment, seen = {}, onSeen, jumpSignal = 0, onMarkAllSeen, fieldMaps, inMyDeck,
+  notes = [], onAddNote, onEditNote, onDeleteNote,
 }: {
   items: FeedItem[];
   people: PersonView[];
@@ -48,6 +50,11 @@ export default function Feed({
   fieldMaps?: Record<string, FieldMaps>;
   /** Friends' cards: is the word in the viewer's decks. */
   inMyDeck?: Record<string, DeckStatus | "none">;
+  /** Every crew note; the ones with a card show on that card. */
+  notes?: CrewNote[];
+  onAddNote?: (text: string, card?: NoteCard) => void;
+  onEditNote?: (id: string, text: string) => void;
+  onDeleteNote?: (id: string) => void;
 }) {
   const [filter, setFilter] = useState<FeedFilter>(NO_FILTER);
   const [limit, setLimit] = useState(PAGE);
@@ -62,6 +69,7 @@ export default function Feed({
   const [pinned, setPinned] = useState<Set<string>>(new Set());
   const [quizzed, setQuizzed] = useState<Set<string>>(new Set());
   const [openThread, setOpenThread] = useState<string | null>(null);
+  const [notesOpenFor, setNotesOpenFor] = useState<string | null>(null);
   // What counted as read when each thread was opened. Opening one marks it
   // read, and its "new" pills must not vanish while you're reading them.
   const [baseline, setBaseline] = useState<Record<string, number>>({});
@@ -81,6 +89,7 @@ export default function Feed({
   const byId = useMemo(() => new Map(people.map((p) => [p.profile.id, p])), [people]);
   const indexOf = useMemo(
     () => new Map(people.map((p, i) => [p.profile.id, i])), [people]);
+  const byCard = useMemo(() => notesByCard(notes), [notes]);
 
   const now = Date.now();
 
@@ -288,45 +297,54 @@ export default function Feed({
                 <span className="font-normal tabular-nums" style={{ color: "var(--ink-ghost)" }}>· {g.count}</span>
               </h3>
               <ul className="space-y-2">
-                {g.items.map((item) => (
-                  <FeedCard
-                    key={item.id}
-                    item={item}
-                    byId={byId}
-                    indexOf={indexOf}
-                    engagement={engagement[item.id]}
-                    viewer={viewer}
-                    canWrite={canWrite}
-                    now={now}
-                    hidden={quizzed.has(item.id)}
-                    onToggleQuiz={() => toggleQuiz(item.id)}
-                    open={openThread === item.id}
-                    onToggleThread={() => toggleThread(item.id)}
-                    freshSince={freshSince(item.id)}
-                    draft={drafts[item.id] ?? ""}
-                    onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
-                    onSubmit={() => submit(item.id)}
-                    onReact={onReact}
-                    card={resolveCard(item, fieldMaps?.[item.user]?.[item.noteType ?? ""])}
-                    deckStatus={inMyDeck?.[item.id]}
-                    sentencesOn={sentences}
-                    cardRef={(el) => {
-                      if (el) cardRefs.current.set(item.id, el);
-                      else cardRefs.current.delete(item.id);
-                    }}
-                    arrived={arrived === item.id}
-                    footer={openThread === item.id && nextUnread ? (
-                      <button
-                        data-testid="next-unread"
-                        onClick={() => goTo(nextUnread)}
-                        className="group mt-2.5 inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-[11.5px] transition duration-150 hover:bg-[rgba(34,211,238,.12)]! active:scale-[.97]"
-                        style={{ borderColor: "rgba(34,211,238,.3)", background: "rgba(34,211,238,.06)", color: "var(--cyan-soft)" }}
-                      >
-                        Next unread <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
-                      </button>
-                    ) : undefined}
-                  />
-                ))}
+                {g.items.map((item) => {
+                  const resolved = resolveCard(item, fieldMaps?.[item.user]?.[item.noteType ?? ""]);
+                  return (
+                    <FeedCard
+                      key={item.id}
+                      item={item}
+                      byId={byId}
+                      indexOf={indexOf}
+                      engagement={engagement[item.id]}
+                      viewer={viewer}
+                      canWrite={canWrite}
+                      now={now}
+                      hidden={quizzed.has(item.id)}
+                      onToggleQuiz={() => toggleQuiz(item.id)}
+                      open={openThread === item.id}
+                      onToggleThread={() => toggleThread(item.id)}
+                      freshSince={freshSince(item.id)}
+                      draft={drafts[item.id] ?? ""}
+                      onDraft={(text) => setDrafts((prev) => ({ ...prev, [item.id]: text }))}
+                      onSubmit={() => submit(item.id)}
+                      onReact={onReact}
+                      card={resolved}
+                      notes={byCard.get(item.id) ?? []}
+                      notesOpen={notesOpenFor === item.id}
+                      onToggleNotes={onAddNote ? () => setNotesOpenFor((cur) => (cur === item.id ? null : item.id)) : undefined}
+                      onAddNote={(text) => onAddNote?.(text, noteCardFrom(item.id, resolved))}
+                      onEditNote={onEditNote}
+                      onDeleteNote={onDeleteNote}
+                      deckStatus={inMyDeck?.[item.id]}
+                      sentencesOn={sentences}
+                      cardRef={(el) => {
+                        if (el) cardRefs.current.set(item.id, el);
+                        else cardRefs.current.delete(item.id);
+                      }}
+                      arrived={arrived === item.id}
+                      footer={openThread === item.id && nextUnread ? (
+                        <button
+                          data-testid="next-unread"
+                          onClick={() => goTo(nextUnread)}
+                          className="group mt-2.5 inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-[11.5px] transition duration-150 hover:bg-[rgba(34,211,238,.12)]! active:scale-[.97]"
+                          style={{ borderColor: "rgba(34,211,238,.3)", background: "rgba(34,211,238,.06)", color: "var(--cyan-soft)" }}
+                        >
+                          Next unread <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
+                        </button>
+                      ) : undefined}
+                    />
+                  );
+                })}
               </ul>
             </section>
           ))}
