@@ -8,7 +8,6 @@ import type { CrewNote, CrewResponse, Engagement, PersonView } from "@/lib/types
 vi.mock("@/lib/sound", () => ({ playCelebration: vi.fn() }));
 
 const TODAY = "2026-09-23";
-const SEEN = "anki-crew:seen:v1";
 
 function person(id: string, name: string, today: number, lastPublishAt = Date.now()): PersonView {
   return {
@@ -137,16 +136,6 @@ describe("the sync line", () => {
   });
 });
 
-describe("the overtake chime", () => {
-  it("rings once, not on every refresh", async () => {
-    localStorage.setItem(SEEN, JSON.stringify({ totals: {}, order: ["peter", "jp"], at: 0 }));
-    await mount();
-    await refresh();
-    await refresh();
-    expect(playCelebration).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe("unread comments", () => {
   const banter = { "peter:1": { reactions: {}, comments: [{ user: "peter", text: "nice", at: 5000 }] } };
   const unreadCrew = () => ok(crew(banter, Date.now(), { _floor: 1000 }));
@@ -229,7 +218,8 @@ describe("writes that fail", () => {
 
 describe("what's new", () => {
   const WHATS_NEW = "anki-crew:whatsnew:v1";
-  const visited = () => localStorage.setItem(SEEN, JSON.stringify({ totals: {}, order: [], at: 0 }));
+  const SEEN = "anki-crew:seen:v1";
+  const visited = () => localStorage.setItem(SEEN, JSON.stringify({ totals: {}, at: 0 }));
 
   it("pops up once for someone who was here before this release", async () => {
     visited();
@@ -401,5 +391,92 @@ describe("notes", () => {
     const input = screen.getByTestId("note-input");
     for (const key of ["1", "2", "4", "?"]) fireEvent.keyDown(input, { key });
     expect(screen.getByTestId("note-input")).toBeInTheDocument();
+  });
+});
+
+describe("the weekly race", () => {
+  beforeEach(() => {
+    // Tuesday of week 40. Only Date is faked; promises and timers stay real.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-29T15:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  function racer(id: string, name: string, days: [string, number][]): PersonView {
+    return {
+      profile: { id, displayName: name, tz: "America/New_York", joinedAt: Date.UTC(2026, 8, 22) },
+      meta: { lastPublishAt: Date.now(), streak: 0, todayKey: "2026-09-29", allTimeReviews: 0, firstReviewAt: 0 },
+      days: days.map(([date, reviews]) => ({ date, reviews, minutes: 1, newCards: 0, ease1: 0, ease2: 0, ease3: reviews, ease4: 0, perDeck: {} })),
+    };
+  }
+  const race = (competition: CrewResponse["competition"], week40: [number, number] = [0, 0]) => ok({
+    ...crew(),
+    people: [
+      racer("jp", "JP", [["2026-09-22", 88], ["2026-09-29", week40[0]]]),
+      racer("adam", "Adam", [["2026-09-26", 894], ["2026-09-29", week40[1]]]),
+    ],
+    competition,
+  });
+  const competitionPosts = () => fetchMock.mock.calls
+    .filter(([url]) => String(url).startsWith("/api/competition"))
+    .map(([, init]) => JSON.parse(init.body));
+
+  it("names the result in the pill, plays it on a tap and marks it seen", async () => {
+    crewReplies.push(race({ results: {} }));
+    await mount();
+    const pill = await screen.findByTestId("moment-pill");
+    expect(pill).toHaveTextContent("🏆 Week 39 results are in");
+    fireEvent.click(pill);
+    expect(screen.getByTestId("roundup-headline")).toHaveTextContent("Adam cruises past JP by 806 for a first ever win");
+    expect(competitionPosts().some((b) => b.results?.["2026-09-21"] === "adam")).toBe(true);
+    expect(playCelebration).not.toHaveBeenCalled(); // JP didn't win it
+  });
+
+  it("stays quiet once the week has been shown, and keeps the strip", async () => {
+    crewReplies.push(race({ results: { "2026-09-21": "adam" } }));
+    await mount();
+    expect(screen.queryByTestId("moment-pill")).toBeNull();
+    expect(screen.getByTestId("week-strip")).toHaveTextContent("Week 39: Adam 894 · JP 88");
+    expect(within(screen.getByTestId("row-adam")).getByTestId("crown")).toBeTruthy();
+  });
+
+  it("rings for a pass only after the tap", async () => {
+    crewReplies.push(race(
+      { results: { "2026-09-21": "adam" }, standing: { week: "2026-09-28", order: ["adam", "jp"] } },
+      [50, 40],
+    ));
+    await mount();
+    const pill = await screen.findByTestId("moment-pill");
+    expect(pill).toHaveTextContent("⚡ You passed Adam this week");
+    expect(playCelebration).not.toHaveBeenCalled();
+    fireEvent.click(pill);
+    expect(playCelebration).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("row-jp").className).toContain("overtaken");
+  });
+
+  it("saves this load as your last look, and keeps the previous one for the arrows through a refresh", async () => {
+    const earlier = { at: Date.UTC(2026, 8, 29, 12), day: "2026-09-29", week: "2026-09-28",
+      scores: { jp: { today: 0, week: 0, all: 0 }, adam: { today: 30, week: 30, all: 924 } } };
+    crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: earlier }, [50, 40]));
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "this week" }));
+    expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+    const saved = competitionPosts().find((b) => b.look);
+    expect(saved.look.day).toBe("2026-09-29");
+    expect(saved.look.scores.jp.week).toBe(50);
+
+    crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: saved.look }, [50, 40]));
+    await refresh();
+    expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+  });
+
+  it("opens a player card from a board avatar", async () => {
+    crewReplies.push(race({ results: { "2026-09-21": "adam" } }));
+    await mount();
+    fireEvent.click(screen.getByTestId("avatar-adam"));
+    expect(screen.getByTestId("player-card")).toHaveTextContent("Adam");
+    fireEvent.click(screen.getByText("Full stats ▸"));
+    expect(screen.queryByTestId("player-card")).toBeNull();
+    expect(screen.getByTestId("stat-grid")).toBeTruthy();
   });
 });

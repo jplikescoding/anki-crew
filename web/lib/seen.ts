@@ -4,14 +4,16 @@
  * The dashboard's payoff is the difference between what you saw last time and
  * what is true now, so that "last time" has to live somewhere. It lives here,
  * per browser, and never leaves the device — it is a display detail, not data.
+ *
+ * Passes and the board's arrows are measured on the server (competition:<id>),
+ * so they play once across devices; this only drives the "+N since you last
+ * looked" line, the count-up, and What's new's "been here before".
  */
 const KEY = "anki-crew:seen:v1";
 
 export type Seen = {
   /** Today's review count per person, as of your last visit. */
   totals: Record<string, number>;
-  /** Standings as of your last visit, best first. */
-  order: string[];
   at: number;
 };
 
@@ -32,30 +34,4 @@ export function writeSeen(seen: Seen): void {
   } catch {
     /* storage unavailable; the page still works, it just stops celebrating */
   }
-}
-
-/**
- * The best person you have overtaken since you last looked, or null.
- *
- * Only reports a genuine change in standings — being ahead of someone you were
- * already ahead of is not an event, and announcing it would cheapen the ones
- * that are.
- */
-export function whoYouPassed(
-  prev: Seen | null,
-  nowOrder: string[],
-  viewerId: string | null,
-): string | null {
-  if (!prev || !viewerId) return null;
-  const was = prev.order.indexOf(viewerId);
-  const now = nowOrder.indexOf(viewerId);
-  if (was < 0 || now < 0 || now >= was) return null;
-
-  // Everyone who was ahead of you and no longer is. prev.order is best-first,
-  // so the first survivor of the filter is the strongest scalp — that is the
-  // one worth naming.
-  const overtaken = prev.order
-    .slice(0, was)
-    .filter((id) => nowOrder.indexOf(id) > now);
-  return overtaken[0] ?? null;
 }

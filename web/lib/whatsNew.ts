@@ -8,6 +8,14 @@ export type Note = { id: string; date: string; title: string; items: string[] };
 
 export const NOTES: Note[] = [
   {
+    id: "2026-09-weekly",
+    date: "September 2026",
+    title: "Win the week",
+    items: [
+      "Weeks now run Monday to Sunday and whoever reviews most wins it — Monday brings the roundup. Click anyone's picture for their card: weeks won, winning run, and your head-to-head.",
+    ],
+  },
+  {
     id: "2026-09-deck-filter",
     date: "September 2026",
     title: "Friends' cards vs. your deck",

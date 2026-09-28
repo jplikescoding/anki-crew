@@ -1,21 +1,27 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Board, { type Range } from "@/app/components/Board";
 import CardFields from "@/app/components/CardFields";
 import CrewChart from "@/app/components/CrewChart";
 import Feed, { ago } from "@/app/components/Feed";
+import MomentPill from "@/app/components/MomentPill";
 import Notes from "@/app/components/Notes";
 import PersonPanel from "@/app/components/PersonPanel";
+import PlayerCard from "@/app/components/PlayerCard";
 import StatTiles from "@/app/components/StatTiles";
+import WeekStrip from "@/app/components/WeekStrip";
+import WeeklyRoundup from "@/app/components/WeeklyRoundup";
 import WhatsNew from "@/app/components/WhatsNew";
-import { Avatar, AvatarUploader } from "@/app/components/Avatar";
-import { rankBy } from "@/lib/metrics";
+import { Avatar, AvatarUploader, PersonCard } from "@/app/components/Avatar";
+import { champion, finishedResults, type WeekResult } from "@/lib/competition";
+import { lookFrom } from "@/lib/metrics";
+import { ackPatch, pendingMoments, silentPatch, type Moment } from "@/lib/moments";
 import { newNotesFor, settleNote } from "@/lib/notes";
-import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
+import { readSeen, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
 import { FLOOR, NOTES_SEEN, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
-import type { CrewNote, CrewResponse, Engagement, FieldMap, NoteCard, PersonView } from "@/lib/types";
+import type { CrewNote, CrewResponse, Engagement, FieldMap, Look, NoteCard, PersonView } from "@/lib/types";
 
 type Tab = "board" | "feed" | "notes" | "you";
 const TABS: Tab[] = ["board", "feed", "notes", "you"];
@@ -50,11 +56,18 @@ export default function Page() {
   // What you've read, per thread. Server copy merged with anything opened
   // since, so a refresh that raced a save can't un-read it.
   const [seen, setSeen] = useState<SeenMap>({});
-  const chimedFor = useRef<string | null>(null);
 
   // What the previous visit showed, captured once so the roll-up has a floor.
   const before = useRef<Seen | null>(null);
-  const [passed, setPassed] = useState<string | null>(null);
+  // The server's copy of your previous look, held for the tab's life so a
+  // refresh -- which saves a new look -- doesn't wipe the arrows.
+  const look = useRef<Look | null | undefined>(undefined);
+  const [results, setResults] = useState<WeekResult[]>([]);
+  const [moments, setMoments] = useState<Moment[]>([]);
+  const queue = useRef<Moment[]>([]);
+  const [roundup, setRoundup] = useState<{ result: WeekResult; late: boolean } | null>(null);
+  const [celebrate, setCelebrate] = useState<{ id: string; tone: "gold" | "rose" } | null>(null);
+  const [cardFor, setCardFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -67,16 +80,23 @@ export default function Page() {
       const next: CrewResponse = await res.json();
 
       if (before.current === null) before.current = readSeen();
-      const order = rankBy(next.people, (p) => todayReviews(p)).map((p) => p.profile.id);
-      const scalp = whoYouPassed(before.current, order, next.viewer);
-      const names = new Map(next.people.map((p) => [p.profile.id, p.profile.displayName]));
-      const scalpName = scalp ? names.get(scalp) ?? null : null;
-      setPassed(scalpName);
-      // `before` is fixed for the session, so every refresh finds the same
-      // overtake again. Ring once for it, not on every return to the tab.
-      if (scalpName && scalp !== chimedFor.current) {
-        chimedFor.current = scalp;
-        playCelebration();
+      const now = Date.now();
+      const finished = finishedResults(next.people, now);
+      const state = next.competition ?? { results: {} };
+      if (look.current === undefined) look.current = state.look ?? null;
+      setResults(finished);
+      setMoments(pendingMoments(next.people, next.viewer, state, finished));
+      const me = next.people.find((p) => p.profile.id === next.viewer);
+      if (me) {
+        // Best effort: a lost save only means a moment may show once more.
+        void fetch(`/api/competition?key=${encodeURIComponent(key)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...silentPatch(next.people, next.viewer, state, finished),
+            look: lookFrom(next.people, me.meta.todayKey, now),
+          }),
+        }).catch(() => {});
       }
 
       setData(next);
@@ -85,7 +105,6 @@ export default function Page() {
       setSeen((prev) => mergeSeen(prev, next.seen ?? {}));
       writeSeen({
         totals: Object.fromEntries(next.people.map((p) => [p.profile.id, todayReviews(p)])),
-        order,
         at: Date.now(),
       });
       setError(null);
@@ -234,6 +253,37 @@ export default function Page() {
     setNotes([]);
   }, []);
 
+  /**
+   * Plays queued moments one after another. A roundup waits for its Close; a
+   * pass sweeps your row, then moves on. The tap that started this is what
+   * lets the chime play at all.
+   */
+  const playNext = useCallback(function next() {
+    const m = queue.current.shift();
+    const me = data?.viewer;
+    if (!m || !me) { setCelebrate(null); return; }
+    if (m.kind === "results" || m.kind === "late") {
+      setRoundup({ result: m.result, late: m.kind === "late" });
+      if (m.result.winner === me) playCelebration();
+      return;
+    }
+    setTab("board");
+    setRange("week");
+    setCelebrate({ id: me, tone: m.kind === "passed" ? "gold" : "rose" });
+    if (m.kind === "passed") playCelebration();
+    window.setTimeout(next, 1800);
+  }, [data?.viewer]);
+
+  const playMoments = useCallback(() => {
+    if (!data) return;
+    queue.current = [...moments];
+    setMoments([]);
+    void send("/api/competition", ackPatch(data.people, data.viewer, results), "couldn't save that you've seen it");
+    playNext();
+  }, [data, moments, results, send, playNext]);
+
+  const cardContext = useMemo(() => ({ open: setCardFor, champion: champion(results) }), [results]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -284,6 +334,7 @@ export default function Page() {
   const seenTotals = before.current?.totals;
 
   return (
+    <PersonCard.Provider value={cardContext}>
     <main className="mx-auto max-w-2xl pb-16">
       <header className="flex items-center justify-between px-5 py-5">
         <div>
@@ -379,21 +430,32 @@ export default function Page() {
 
       {tab === "board" && (
         <>
-          <div className="flex gap-1 px-5 pb-1 text-[11.5px]">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                aria-pressed={range === r}
-                className="rounded-full px-3 py-1 capitalize transition-colors"
-                style={{
-                  background: range === r ? "var(--pane-lift)" : "transparent",
-                  color: range === r ? "var(--ink)" : "var(--ink-faint)",
-                }}
-              >
-                {r === "all" ? "all time" : r === "week" ? "this week" : r}
-              </button>
-            ))}
+          <MomentPill moments={moments} people={data.people} viewer={data.viewer} onPlay={playMoments} />
+          <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-1 text-[11.5px]">
+            <div className="flex gap-1">
+              {RANGES.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  aria-pressed={range === r}
+                  className="rounded-full px-3 py-1 capitalize transition-colors"
+                  style={{
+                    background: range === r ? "var(--pane-lift)" : "transparent",
+                    color: range === r ? "var(--ink)" : "var(--ink-faint)",
+                  }}
+                >
+                  {r === "all" ? "all time" : r === "week" ? "this week" : r}
+                </button>
+              ))}
+            </div>
+            {results.length > 0 && (
+              <WeekStrip
+                result={results[results.length - 1]}
+                history={results}
+                people={data.people}
+                onReplay={() => setRoundup({ result: results[results.length - 1], late: false })}
+              />
+            )}
           </div>
           <div className="pt-2">
             <Board
@@ -401,7 +463,10 @@ export default function Page() {
               viewer={data.viewer}
               range={range}
               seen={seenTotals}
-              onSelect={(id) => { setWho(id); setTab("you"); }}
+              look={look.current ?? null}
+              champion={champion(results)}
+              celebrate={celebrate}
+              onSelect={setCardFor}
             />
           </div>
           <StatTiles people={data.people} viewer={data.viewer} />
@@ -467,6 +532,7 @@ export default function Page() {
                 }}
               >
                 {p.profile.displayName}
+                {champion(results) === p.profile.id && " 👑"}
               </button>
             ))}
           </div>
@@ -501,7 +567,7 @@ export default function Page() {
               onSave={saveFieldMap}
             />
           )}
-          <PersonPanel person={selected} items={data.feed} fieldMaps={data.fieldMaps?.[selected.profile.id]} />
+          <PersonPanel person={selected} items={data.feed} fieldMaps={data.fieldMaps?.[selected.profile.id]} results={results} />
         </>
       )}
 
@@ -549,6 +615,30 @@ export default function Page() {
       )}
 
       {notes.length > 0 && <WhatsNew notes={notes} onClose={closeNotes} />}
+      {roundup && (
+        <WeeklyRoundup
+          result={roundup.result}
+          history={results}
+          people={data.people}
+          viewer={data.viewer}
+          late={roundup.late}
+          onClose={() => { setRoundup(null); playNext(); }}
+        />
+      )}
+      {cardFor && (() => {
+        const p = data.people.find((x) => x.profile.id === cardFor);
+        return p ? (
+          <PlayerCard
+            person={p}
+            people={data.people}
+            viewer={data.viewer}
+            results={results}
+            onClose={() => setCardFor(null)}
+            onFullStats={() => { setWho(p.profile.id); setTab("you"); setCardFor(null); }}
+          />
+        ) : null;
+      })()}
     </main>
+    </PersonCard.Provider>
   );
 }
