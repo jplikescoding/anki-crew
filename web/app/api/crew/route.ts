@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { deckWord } from "@/lib/fields";
 import { userForReadKey } from "@/lib/identity";
-import { currentDayKey } from "@/lib/metrics";
+import { dayNow } from "@/lib/competition";
 import {
   getCompetition, getEngagement, getFeed, getFieldMaps, getNotes, getNoteTypes, getPerson, getSeen, getWordStatuses, listUsers,
 } from "@/lib/store";
@@ -18,11 +18,12 @@ export async function GET(req: Request) {
   const loaded = await Promise.all(ids.map((id) => getPerson(id)));
   // A publisher reports its day only when it syncs. Bring everyone up to the
   // day it is now for them, so a stale "today" reads as nothing yet rather
-  // than as yesterday's cards.
+  // than as yesterday's cards. An unknown zone is read as the last zone on
+  // Earth, as the weekly race reads it, so their today and streak still roll.
   const now = Date.now();
   const people = loaded
     .filter((p): p is PersonView => p !== null)
-    .map((p) => ({ ...p, meta: { ...p.meta, todayKey: currentDayKey(p.profile.tz, p.meta.todayKey, now) } }));
+    .map((p) => ({ ...p, meta: { ...p.meta, todayKey: dayNow(p, now) } }));
   const feed = await getFeed();
   const engagement = await getEngagement(feed.map((f) => f.id));
   const seen = await getSeen(viewer);

@@ -74,6 +74,22 @@ describe("GET /api/crew", () => {
     expect(getSeen).toHaveBeenCalledWith("jp");
   });
 
+  it("rolls an unknown zone's day forward as the last zone on Earth", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 10, 12));
+    const saved = { tz: person.profile.tz, todayKey: person.meta.todayKey };
+    person.profile.tz = "local";
+    person.meta.todayKey = "2026-10-01";
+    try {
+      const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
+      expect(["2026-10-09", "2026-10-10"]).toContain((await res.json()).people[0].meta.todayKey);
+    } finally {
+      person.profile.tz = saved.tz;
+      person.meta.todayKey = saved.todayKey;
+      vi.useRealTimers();
+    }
+  });
+
   it("returns what the viewer has already seen of the competition", async () => {
     const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
     expect((await res.json()).competition).toEqual({ results: { "2026-09-21": "adam" } });

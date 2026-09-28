@@ -296,9 +296,9 @@ server state above). It keeps the per-browser today totals that drive the
   trophies section on cards (tiles stay muted).
 - **Everyone 0 in a week:** tie → no winner.
 - **Viewer not a competitor that week:** roundup without H2H; no pass moments.
-- **Zone `local` (unknown tz):** that person's current day is their reported
-  `todayKey`, as today; §3.4 treats it as already-Monday once their reported
-  day is Monday.
+- **Zone `local` (unknown tz):** read as `Etc/GMT+12` (the last zone on
+  Earth) everywhere -- the crew route's current day, today, streak and §3.4 --
+  so an unknown clock still rolls over and can never hold a week open.
 - **New device:** server state means moments and arrows carry over; first ever
   load has no `look`, so no arrows.
 - **Storage/API failure writing competition state:** page still renders;
