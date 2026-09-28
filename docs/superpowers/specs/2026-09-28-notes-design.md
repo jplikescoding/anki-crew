@@ -155,7 +155,7 @@ success.
 - `web/lib/unread.ts` — `NOTES_SEEN = "_notes"`.
 - `web/app/api/note/route.ts` (new).
 - `web/app/api/crew/route.ts` — include notes.
-- `web/app/components/Notes.tsx` (new) — tab, chips, list, composer.
+- `web/app/components/Notes.tsx` (new) — tab, person filter, list, composer.
 - `web/app/components/NoteItem.tsx` (new) — one note + edit/delete; shared by
   the tab and the feed.
 - `web/app/components/FeedCard.tsx` — `📝` button and the expanded card notes.
