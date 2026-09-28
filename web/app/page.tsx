@@ -287,7 +287,7 @@ export default function Page() {
     <main className="mx-auto max-w-2xl pb-16">
       <header className="flex items-center justify-between px-5 py-5">
         <div>
-          <h1 className="text-[17px] font-bold tracking-[-.02em]">Anki Crew</h1>
+          <h1 className="whitespace-nowrap text-[17px] font-bold tracking-[-.02em]">Anki Crew</h1>
           {gained > 0 && (
             <p data-testid="gained" className="mt-0.5 text-[11.5px]" style={{ color: "var(--cyan-soft)" }}>
               +{gained.toLocaleString()} since you last looked
@@ -313,7 +313,7 @@ export default function Page() {
                   else setJumpSignal(0);
                 }}
                 aria-pressed={tab === t}
-                className="relative rounded-full px-3 py-1.5 capitalize transition-colors"
+                className="relative rounded-full px-2 py-1.5 capitalize transition-colors sm:px-3"
                 style={{
                   background: tab === t ? "var(--pane-lift)" : "transparent",
                   color: tab === t ? "var(--ink)" : "var(--ink-faint)",
@@ -349,7 +349,7 @@ export default function Page() {
             onClick={() => void load()}
             aria-label="Refresh"
             title="Checks for new data. Your own stats publish a minute or two after you close Anki."
-            className="ml-1 rounded-full px-2.5 py-1.5 text-[13px] transition-colors"
+            className="ml-1 rounded-full px-2 py-1.5 text-[13px] transition-colors sm:px-2.5"
             style={{ color: busy ? "var(--cyan-soft)" : "var(--ink-faint)" }}
           >
             <span
@@ -369,7 +369,7 @@ export default function Page() {
             onClick={() => setShortcuts(true)}
             aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts"
-            className="rounded-full px-2.5 py-1.5 text-[13px] font-semibold transition-colors"
+            className="rounded-full px-2 py-1.5 text-[13px] font-semibold transition-colors sm:px-2.5"
             style={{ color: "var(--ink-faint)" }}
           >
             ?
