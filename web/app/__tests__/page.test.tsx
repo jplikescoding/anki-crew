@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act, within, cleanup } from "@testi
 import Page from "@/app/page";
 import { playCelebration } from "@/lib/sound";
 import { NOTES } from "@/lib/whatsNew";
-import type { CrewResponse, Engagement, PersonView } from "@/lib/types";
+import type { CrewNote, CrewResponse, Engagement, PersonView } from "@/lib/types";
 
 vi.mock("@/lib/sound", () => ({ playCelebration: vi.fn() }));
 
@@ -307,7 +307,7 @@ describe("what's new", () => {
 describe("card fields", () => {
   it("saves your choice and applies it straight away", async () => {
     await mount();
-    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.keyDown(window, { key: "4" });
     fireEvent.click(screen.getByRole("button", { name: /card setup/i }));
     fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "Vocabulary-English" } });
     const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/fieldmap"));
@@ -318,12 +318,88 @@ describe("card fields", () => {
   it("goes back to what was saved, and says so, when the save fails", async () => {
     writeReply = new Response("{}", { status: 500 });
     await mount();
-    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.keyDown(window, { key: "4" });
     fireEvent.click(screen.getByRole("button", { name: /card setup/i }));
     await act(async () => {
       fireEvent.change(screen.getByLabelText("Core Word"), { target: { value: "Vocabulary-English" } });
     });
     await waitFor(() => expect(screen.getByLabelText("Core Word")).toHaveValue(""));
     expect(screen.getByTestId("sync-note")).toHaveTextContent(/didn't save/i);
+  });
+});
+
+describe("notes", () => {
+  const theirs: CrewNote = { id: "peter:5:ab", user: "peter", text: "は marks the topic", createdAt: Date.now() - 5_000 };
+  const mine: CrewNote = { id: "jp:4:cd", user: "jp", text: "my own", createdAt: Date.now() - 4_000 };
+  const withNotes = (notes: CrewNote[], seen: Record<string, number> = {}) => ok({ ...crew({}, Date.now(), seen), notes });
+
+  it("puts Notes on 3 and You on 4", async () => {
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    expect(screen.getByTestId("notes-empty")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "4" });
+    expect(screen.getByRole("button", { name: /card setup/i })).toBeInTheDocument();
+  });
+
+  it("counts other people's new notes on the tab and clears it on opening", async () => {
+    crewReplies = [withNotes([theirs, mine])];
+    await mount();
+    expect(screen.getByTestId("notes-badge")).toHaveTextContent("1");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^notes/ })); });
+    expect(screen.queryByTestId("notes-badge")).toBeNull();
+    const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/seen"));
+    expect(JSON.parse(call![1].body)).toEqual({ itemId: "_notes", upTo: theirs.createdAt });
+  });
+
+  it("shows no count for notes already seen", async () => {
+    crewReplies = [withNotes([theirs], { _notes: theirs.createdAt })];
+    await mount();
+    expect(screen.queryByTestId("notes-badge")).toBeNull();
+  });
+
+  it("shows a new note at once and keeps the server's copy", async () => {
+    const saved: CrewNote = { id: "jp:9:zz", user: "jp", text: "で = by means of", createdAt: Date.now() };
+    writeReply = ok({ ok: true, note: saved });
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.click(screen.getByTestId("new-note"));
+    fireEvent.change(screen.getByTestId("note-input"), { target: { value: "で = by means of" } });
+    await act(async () => { fireEvent.click(screen.getByTestId("note-save")); });
+    const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/note"));
+    expect(call![1].method).toBe("POST");
+    expect(JSON.parse(call![1].body)).toEqual({ text: "で = by means of" });
+    await waitFor(() => expect(screen.getByTestId("note-jp:9:zz")).toBeInTheDocument());
+  });
+
+  it("says so when a note didn't save", async () => {
+    writeReply = new Response("{}", { status: 500 });
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.click(screen.getByTestId("new-note"));
+    fireEvent.change(screen.getByTestId("note-input"), { target: { value: "lost" } });
+    await act(async () => { fireEvent.click(screen.getByTestId("note-save")); });
+    await waitFor(() => expect(screen.getByTestId("sync-note")).toHaveTextContent("your note didn't save"));
+    expect(screen.queryByText("lost")).toBeNull();
+  });
+
+  it("deletes your note with DELETE", async () => {
+    crewReplies = [withNotes([mine])];
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.click(screen.getByTestId("note-delete-jp:4:cd"));
+    await act(async () => { fireEvent.click(screen.getByTestId("note-delete-confirm-jp:4:cd")); });
+    const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith("/api/note"));
+    expect(call![1].method).toBe("DELETE");
+    expect(JSON.parse(call![1].body)).toEqual({ id: "jp:4:cd" });
+    expect(screen.queryByTestId("note-jp:4:cd")).toBeNull();
+  });
+
+  it("leaves shortcuts alone while typing a note", async () => {
+    await mount();
+    fireEvent.keyDown(window, { key: "3" });
+    fireEvent.click(screen.getByTestId("new-note"));
+    const input = screen.getByTestId("note-input");
+    for (const key of ["1", "2", "4", "?"]) fireEvent.keyDown(input, { key });
+    expect(screen.getByTestId("note-input")).toBeInTheDocument();
   });
 });

@@ -4,19 +4,21 @@ import Board, { type Range } from "@/app/components/Board";
 import CardFields from "@/app/components/CardFields";
 import CrewChart from "@/app/components/CrewChart";
 import Feed, { ago } from "@/app/components/Feed";
+import Notes from "@/app/components/Notes";
 import PersonPanel from "@/app/components/PersonPanel";
 import StatTiles from "@/app/components/StatTiles";
 import WhatsNew from "@/app/components/WhatsNew";
 import { Avatar, AvatarUploader } from "@/app/components/Avatar";
 import { rankBy } from "@/lib/metrics";
+import { newNotesFor, settleNote } from "@/lib/notes";
 import { readSeen, whoYouPassed, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
-import { FLOOR, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
+import { FLOOR, NOTES_SEEN, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
-import type { CrewResponse, Engagement, FieldMap, PersonView } from "@/lib/types";
+import type { CrewNote, CrewResponse, Engagement, FieldMap, NoteCard, PersonView } from "@/lib/types";
 
-type Tab = "board" | "feed" | "you";
-const TABS: Tab[] = ["board", "feed", "you"];
+type Tab = "board" | "feed" | "notes" | "you";
+const TABS: Tab[] = ["board", "feed", "notes", "you"];
 const RANGES: Range[] = ["today", "week", "all"];
 const HINT_KEY = "anki-crew:hinted:v1";
 const BAD_LINK = "That link isn't valid. Check the key on the end of the URL, or ask JP for yours.";
@@ -128,19 +130,24 @@ export default function Page() {
    * Except /api/seen: mergeSeen keeps the local read mark through that
    * reload, on purpose, so a failed save can't ask again, fail again, and
    * reload forever.
+   *
+   * Resolves to the server's reply, or null once it has failed and reloaded.
    */
-  const send = useCallback((path: string, body: object, failed: string) => {
+  const send = useCallback((path: string, body: object, failed: string, method = "POST") =>
     fetch(`${path}?key=${encodeURIComponent(apiKey)}`, {
-      method: "POST",
+      method,
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     })
-      .then((res) => { if (!res.ok) throw new Error(String(res.status)); })
+      .then(async (res): Promise<unknown> => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json().catch(() => null);
+      })
       .catch(async () => {
         await load();
         setProblem(failed);
-      });
-  }, [apiKey, load]);
+        return null;
+      }), [apiKey, load]);
 
   /** Applied locally first: a reaction that waits on a round trip feels broken. */
   const react = useCallback((itemId: string, emoji: string | null) => {
@@ -190,6 +197,33 @@ export default function Page() {
     send("/api/seen", { all: true, upTo }, "couldn't mark everything read");
   }, [send]);
 
+  const setCrewNotes = useCallback((change: (notes: CrewNote[]) => CrewNote[]) => {
+    setData((d) => d && ({ ...d, notes: change(d.notes ?? []) }));
+  }, []);
+
+  /** Shown at once; swapped for the server's copy, which has the real id. */
+  const addNote = useCallback((text: string, card?: NoteCard) => {
+    if (!data?.viewer) return;
+    const temp: CrewNote = {
+      id: `tmp:${Date.now()}`, user: data.viewer, text, createdAt: Date.now(), ...(card ? { card } : {}),
+    };
+    setCrewNotes((notes) => [temp, ...notes]);
+    void send("/api/note", card ? { text, card } : { text }, "your note didn't save").then((reply) => {
+      const saved = (reply as { note?: CrewNote } | null)?.note;
+      if (saved) setCrewNotes((notes) => settleNote(notes, temp.id, saved));
+    });
+  }, [data?.viewer, send, setCrewNotes]);
+
+  const editNote = useCallback((id: string, text: string) => {
+    setCrewNotes((notes) => notes.map((n) => (n.id === id ? { ...n, text, editedAt: Date.now() } : n)));
+    void send("/api/note", { id, text }, "your note didn't save", "PUT");
+  }, [send, setCrewNotes]);
+
+  const deleteNote = useCallback((id: string) => {
+    setCrewNotes((notes) => notes.filter((n) => n.id !== id));
+    void send("/api/note", { id }, "your note didn't delete", "DELETE");
+  }, [send, setCrewNotes]);
+
   const dismissHint = () => {
     setHint(false);
     try { localStorage.setItem(HINT_KEY, "1"); } catch { /* storage blocked */ }
@@ -210,7 +244,8 @@ export default function Page() {
       if (k === "escape") { setShortcuts(false); return; }
       if (k === "1") { setTab("board"); setJumpSignal(0); }
       else if (k === "2") { setTab("feed"); setJumpSignal(0); }
-      else if (k === "3") { setTab("you"); setJumpSignal(0); }
+      else if (k === "3") { setTab("notes"); setJumpSignal(0); }
+      else if (k === "4") { setTab("you"); setJumpSignal(0); }
       else if (k === "t") setRange("today");
       else if (k === "w") setRange("week");
       else if (k === "a") setRange("all");
@@ -219,6 +254,13 @@ export default function Page() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [load]);
+
+  const newNotes = data ? newNotesFor(data.notes ?? [], data.viewer, seen) : [];
+  const newestNewNote = Math.max(0, ...newNotes.map((n) => n.createdAt));
+  // Being on the Notes tab is reading it, including notes a refresh brings in.
+  useEffect(() => {
+    if (tab === "notes" && newestNewNote > 0) markSeen(NOTES_SEEN, newestNewNote);
+  }, [tab, newestNewNote, markSeen]);
 
   if (error) {
     return (
@@ -287,6 +329,17 @@ export default function Page() {
                     style={{ background: "var(--cyan)", color: "#04121A" }}
                   >
                     {unreadComments}
+                  </span>
+                )}
+                {t === "notes" && newNotes.length > 0 && tab !== "notes" && (
+                  <span
+                    key={newNotes.length}
+                    data-testid="notes-badge"
+                    title={`${newNotes.length} new note${newNotes.length === 1 ? "" : "s"}`}
+                    className="badge-pop absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                    style={{ background: "var(--cyan)", color: "#04121A" }}
+                  >
+                    {newNotes.length}
                   </span>
                 )}
               </button>
@@ -372,6 +425,22 @@ export default function Page() {
           jumpSignal={jumpSignal}
           fieldMaps={data.fieldMaps}
           inMyDeck={data.inMyDeck}
+          notes={data.notes ?? []}
+          onAddNote={addNote}
+          onEditNote={editNote}
+          onDeleteNote={deleteNote}
+        />
+      )}
+
+      {tab === "notes" && (
+        <Notes
+          notes={data.notes ?? []}
+          people={data.people}
+          viewer={data.viewer}
+          canWrite={Boolean(apiKey && data.viewer)}
+          onAdd={(text) => addNote(text)}
+          onEdit={editNote}
+          onDelete={deleteNote}
         />
       )}
 
@@ -460,7 +529,7 @@ export default function Page() {
           <div className="pane w-full max-w-xs px-5 py-4" style={{ background: "#12172A" }} onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-3 text-[13px] font-semibold">Shortcuts</h2>
             <dl className="space-y-1.5 text-[12px]" style={{ color: "var(--ink-dim)" }}>
-              {[["1 2 3", "Board, Feed, You"], ["t w a", "Today, week, all time"], ["n", "Next unread comment"], ["g", "Back to top"], ["r", "Refresh"], ["?", "This list"]].map(
+              {[["1 2 3 4", "Board, Feed, Notes, You"], ["t w a", "Today, week, all time"], ["n", "Next unread comment"], ["g", "Back to top"], ["r", "Refresh"], ["?", "This list"]].map(
                 ([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <dt><kbd className="rounded px-1.5 py-0.5" style={{ background: "var(--pane-lift)", color: "var(--ink)" }}>{k}</kbd></dt>

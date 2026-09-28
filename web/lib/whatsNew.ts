@@ -8,6 +8,14 @@ export type Note = { id: string; date: string; title: string; items: string[] };
 
 export const NOTES: Note[] = [
   {
+    id: "2026-09-notes",
+    date: "September 2026",
+    title: "Notes",
+    items: [
+      "Tap 📝 on any card to jot down what you learned from it — everyone sees it there and in the new Notes tab.",
+    ],
+  },
+  {
     id: "2026-09-momentum",
     date: "September 2026",
     title: "Who's catching up",
