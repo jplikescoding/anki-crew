@@ -81,8 +81,9 @@ import {
   saveSnapshot, listUsers, getPerson, getFeed, markEngaged, setReaction, addComment,
   getEngagement, setAvatar, getSeen, markSeen, markAllSeen, FEED_CAP, COMMENT_CAP,
   getNoteTypes, getWordStatuses, getFieldMaps, setFieldMap, WORDS_CHUNK,
+  getNotes, getNote, putNote, deleteNote,
 } from "@/lib/store";
-import type { IngestBody, FeedItem } from "@/lib/types";
+import type { CrewNote, IngestBody, FeedItem } from "@/lib/types";
 
 function body(over: Partial<IngestBody> = {}): IngestBody {
   return {
@@ -364,5 +365,43 @@ describe("read state", () => {
   it("reads times that Redis hands back as strings", async () => {
     state.hashes.set("seen:jp", new Map([["peter:1", "123"]]));
     expect((await getSeen("jp"))["peter:1"]).toBe(123);
+  });
+});
+
+describe("notes", () => {
+  beforeEach(() => { state.hashes.clear(); });
+
+  const n = (id: string, createdAt: number): CrewNote => ({ id, user: "jp", text: `note ${id}`, createdAt });
+
+  it("stores notes and returns them newest first", async () => {
+    await putNote(n("a", 100));
+    await putNote(n("b", 300));
+    await putNote(n("c", 200));
+    expect((await getNotes()).map((x) => x.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("is empty before anyone writes one", async () => {
+    expect(await getNotes()).toEqual([]);
+  });
+
+  it("finds one by id, and replaces it on a second put", async () => {
+    await putNote(n("a", 100));
+    await putNote({ ...n("a", 100), text: "edited", editedAt: 150 });
+    expect(await getNote("a")).toEqual({ ...n("a", 100), text: "edited", editedAt: 150 });
+    expect(await getNote("zzz")).toBeNull();
+    expect(await getNotes()).toHaveLength(1);
+  });
+
+  it("deletes one without touching the rest", async () => {
+    await putNote(n("a", 100));
+    await putNote(n("b", 200));
+    await deleteNote("a");
+    expect((await getNotes()).map((x) => x.id)).toEqual(["b"]);
+  });
+
+  it("skips a stored value that isn't a note", async () => {
+    await putNote(n("a", 100));
+    state.hashes.get("notes")!.set("junk", JSON.stringify({ nope: true }));
+    expect((await getNotes()).map((x) => x.id)).toEqual(["a"]);
   });
 });

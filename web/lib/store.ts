@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import type { Comment, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
+import type { Comment, CrewNote, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
 import { FLOOR, type SeenMap } from "@/lib/unread";
 
 const redis = new Redis({
@@ -13,6 +13,7 @@ export const WORDS_CHUNK = 5000;
 const USERS = "crew:users";
 const FEED = "feed";
 const ENGAGED = "feed:engaged";
+const NOTES = "notes";
 export const COMMENT_CAP = 50;
 export const MAX_COMMENT_CHARS = 280;
 
@@ -268,4 +269,40 @@ export async function setFieldMap(id: string, noteType: string, map: FieldMap): 
   if (Object.keys(map).length === 0) delete all[noteType]; else all[noteType] = map;
   await redis.set(fieldMapKey(id), JSON.stringify(all));
   return all;
+}
+
+/* ------------------------------------------------------------------ notes */
+
+function isNote(v: unknown): v is CrewNote {
+  const n = v as CrewNote | null;
+  return !!n && typeof n.id === "string" && typeof n.user === "string"
+    && typeof n.text === "string" && typeof n.createdAt === "number";
+}
+
+/**
+ * Every note, newest first. One hash read: a crew of five writes nowhere near
+ * enough for this to need paging.
+ */
+export async function getNotes(): Promise<CrewNote[]> {
+  const raw = (await redis.hgetall<Record<string, unknown>>(NOTES)) ?? {};
+  return Object.values(raw)
+    .map((v) => parse<unknown>(v))
+    .filter(isNote)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getNote(id: string): Promise<CrewNote | null> {
+  const raw = await redis.hget(NOTES, id);
+  if (raw === null || raw === undefined) return null;
+  const note = parse<unknown>(raw);
+  return isNote(note) ? note : null;
+}
+
+/** Creates or replaces. Who may do which is the route's call, not the store's. */
+export async function putNote(note: CrewNote): Promise<void> {
+  await redis.hset(NOTES, { [note.id]: JSON.stringify(note) });
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await redis.hdel(NOTES, id);
 }
