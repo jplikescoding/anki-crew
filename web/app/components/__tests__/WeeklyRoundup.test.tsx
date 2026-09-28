@@ -40,6 +40,15 @@ describe("WeeklyRoundup", () => {
     expect(screen.queryByText("Your head-to-head")).toBeNull();
   });
 
+  it("skips the beats on a click inside, without closing", () => {
+    const onClose = vi.fn();
+    render(<WeeklyRoundup result={W40} history={[W39, W40]} people={[jp, adam]} viewer="jp" onClose={onClose} />);
+    expect(screen.getByTestId("roundup")).not.toHaveClass("skip-beats");
+    fireEvent.click(screen.getByTestId("roundup-headline"));
+    expect(screen.getByTestId("roundup")).toHaveClass("skip-beats");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("closes on the button, Esc and the backdrop", () => {
     const onClose = vi.fn();
     render(<WeeklyRoundup result={W40} history={[W39, W40]} people={[jp, adam]} viewer="jp" onClose={onClose} />);

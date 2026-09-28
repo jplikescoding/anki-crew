@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Avatar } from "@/app/components/Avatar";
 import { headToHead, trophies, weekLabel, type Entry, type WeekResult } from "@/lib/competition";
 import { headline, swingLine } from "@/lib/roundup";
@@ -28,6 +28,8 @@ export default function WeeklyRoundup({ result, history, people, viewer, late = 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  // A click anywhere inside plays the rest of the beats at once.
+  const [skip, setSkip] = useState(false);
 
   const names = Object.fromEntries(people.map((p) => [p.profile.id, p.profile.displayName]));
   const byId = new Map(people.map((p) => [p.profile.id, p]));
@@ -52,8 +54,8 @@ export default function WeeklyRoundup({ result, history, people, viewer, late = 
         role="dialog"
         aria-label={weekLabel(result.week)}
         data-testid="roundup"
-        onClick={(e) => e.stopPropagation()}
-        className="card-rise relative flex w-full max-w-[760px] flex-col overflow-hidden rounded-[20px] border sm:flex-row"
+        onClick={(e) => { e.stopPropagation(); setSkip(true); }}
+        className={`card-rise relative flex w-full max-w-[760px] flex-col overflow-hidden rounded-[20px] border sm:flex-row${skip ? " skip-beats" : ""}`}
         style={{
           background: "linear-gradient(180deg,#121628,#0B0E1B)",
           borderColor: "rgba(251,191,36,.35)",

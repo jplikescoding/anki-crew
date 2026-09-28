@@ -162,6 +162,7 @@ body {
 .beat-1 { animation: beat-drop 520ms cubic-bezier(.22,.8,.3,1) 120ms both; }
 .beat-2 { transform-origin: bottom; animation: beat-rise 620ms cubic-bezier(.22,.8,.3,1) 700ms both; }
 .beat-3 { animation: beat-fade 520ms ease-out 1300ms both; }
+.skip-beats :is(.beat-1, .beat-2, .beat-3) { animation-delay: 0s; animation-duration: 0.01ms; }
 
 /* Slow gold rays behind the winner. */
 @keyframes rays-turn { to { transform: rotate(360deg); } }
@@ -181,6 +182,7 @@ body {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
   }
 }
