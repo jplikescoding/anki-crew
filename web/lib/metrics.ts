@@ -1,7 +1,7 @@
 // Every number the dashboard shows is derived here from stored daily rows.
 // Nothing is pre-baked by the publisher, so changing what the leaderboard
 // rewards is a change to this file alone -- no script edits, no lost history.
-import type { DayRow, PersonView } from "@/lib/types";
+import type { DayRow, Look, LookScores, PersonView } from "@/lib/types";
 
 export function retention(days: DayRow[]): number | null {
   let pass = 0;
@@ -30,8 +30,45 @@ export function windowFrom(days: DayRow[], fromDate: string): DayRow[] {
   return days.filter((d) => d.date >= fromDate);
 }
 
+/** Monday of the week `todayKey` falls in. Weeks run Monday to Sunday. */
 export function weekStart(todayKey: string): string {
-  return shiftDays(todayKey, -6);
+  const dow = new Date(`${todayKey}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+  return shiftDays(todayKey, -((dow + 6) % 7));
+}
+
+/** Whole days left in the week after today: 6 on a Monday, 0 on a Sunday. */
+export function daysLeftInWeek(todayKey: string): number {
+  return 6 - ((new Date(`${todayKey}T00:00:00Z`).getUTCDay() + 6) % 7);
+}
+
+/**
+ * Consecutive studied days ending today, or ending yesterday while today is
+ * still empty. Worked out here rather than trusted from the publisher: one
+ * that stops syncing would otherwise show its last streak forever.
+ */
+export function currentStreak(days: DayRow[], todayKey: string): number {
+  const studied = new Set(days.filter((d) => d.reviews > 0).map((d) => d.date));
+  let day = studied.has(todayKey) ? todayKey : shiftDays(todayKey, -1);
+  let n = 0;
+  while (studied.has(day)) {
+    n++;
+    day = shiftDays(day, -1);
+  }
+  return n;
+}
+
+/** The longest run of consecutive studied days in someone's history. */
+export function bestStreak(days: DayRow[]): number {
+  const dates = days.filter((d) => d.reviews > 0).map((d) => d.date).sort();
+  let best = 0;
+  let run = 0;
+  let prev = "";
+  for (const d of dates) {
+    run = prev && shiftDays(prev, 1) === d ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  return best;
 }
 
 /** Date arithmetic on YYYY-MM-DD keys, done in UTC so DST never shifts a key. */
@@ -64,61 +101,73 @@ function reviewsOn(person: PersonView, date: string): number {
 
 export type Range = "today" | "week" | "all";
 
+export type Momentum = { dir: 1 | -1; amount: number; rival: string; leading: boolean };
+
+/** A person's score on a range, as of now, on their own day. */
+export function scoreNow(person: PersonView, range: Range): number {
+  if (range === "today") return reviewsOn(person, person.meta.todayKey);
+  if (range === "week") return totals(windowFrom(person.days, weekStart(person.meta.todayKey))).reviews;
+  return totals(person.days).reviews;
+}
+
+/** What to remember as "what you saw", so the next visit can draw arrows. */
+export function lookFrom(people: PersonView[], viewerDay: string, at: number): Look {
+  const scores: Record<string, LookScores> = {};
+  for (const p of people) {
+    scores[p.profile.id] = { today: scoreNow(p, "today"), week: scoreNow(p, "week"), all: scoreNow(p, "all") };
+  }
+  return { at, day: viewerDay, week: weekStart(viewerDay), scores };
+}
+
 /**
- * A person's score for a range, as of `back` days before their own today.
- * `back` is 1 for "as of yesterday": the week ending yesterday, or the total
- * before today.
+ * The look's score for each person on a range, or null when there is nothing
+ * fair to compare against: no look yet, or the range's period has rolled over
+ * since (a new day for Today, a new week for This week).
  */
-function scoreAsOf(person: PersonView, range: Range, back: number): number {
-  const end = shiftDays(person.meta.todayKey, -back);
-  if (range === "today") return reviewsOn(person, end);
-  const from = range === "week" ? weekStart(end) : "";
-  return totals(person.days.filter((d) => d.date >= from && d.date <= end)).reviews;
+function scoresThen(look: Look | null, range: Range, viewerDay: string): ((p: PersonView) => number) | null {
+  if (!look) return null;
+  if (range === "today" && look.day !== viewerDay) return null;
+  if (range === "week" && look.week !== weekStart(viewerDay)) return null;
+  return (p) => look.scores[p.profile.id]?.[range] ?? 0;
 }
 
 /** Position of each person, 1-based, ties broken by name so it never jitters. */
-function ranksAsOf(people: PersonView[], range: Range, back: number): Record<string, number> {
-  const order = rankBy(people, (p) => scoreAsOf(p, range, back));
+function ranksBy(people: PersonView[], pick: (p: PersonView) => number): Record<string, number> {
   const out: Record<string, number> = {};
-  order.forEach((p, i) => { out[p.profile.id] = i + 1; });
+  rankBy(people, pick).forEach((p, i) => { out[p.profile.id] = i + 1; });
   return out;
 }
 
 /**
- * How many places each person moved since yesterday, on the range the board is
- * showing. Positive means they climbed. Everyone is measured on their own day,
- * so a crewmate in another zone isn't compared on the wrong date. With no
- * yesterday to compare against, everyone reads as unmoved rather than as
- * having climbed from nowhere.
+ * How many places each person moved since you last looked, on the range the
+ * board is showing. Positive means they climbed.
  */
-export function rankDeltas(people: PersonView[], range: Range): Record<string, number> {
-  const noHistory = people.every((p) => scoreAsOf(p, range, 1) === 0);
-  const before = ranksAsOf(people, range, 1);
-  const now = ranksAsOf(people, range, 0);
+export function rankDeltas(
+  people: PersonView[], range: Range, look: Look | null, viewerDay: string,
+): Record<string, number> {
+  const then = scoresThen(look, range, viewerDay);
+  const now = ranksBy(people, (p) => scoreNow(p, range));
+  const before = then ? ranksBy(people, then) : now;
   const out: Record<string, number> = {};
-  for (const p of people) {
-    out[p.profile.id] = noHistory ? 0 : before[p.profile.id] - now[p.profile.id];
-  }
+  for (const p of people) out[p.profile.id] = before[p.profile.id] - now[p.profile.id];
   return out;
 }
 
-export type Momentum = { dir: 1 | -1; amount: number; rival: string; leading: boolean };
-
 /**
- * Whether each person gained or lost ground since yesterday on the person just
- * above them (the leader: on second place). Rank arrows only move on an
- * overtake, which on a week can take days; this is the chase in between.
- * Not for Today, where yesterday's day is a different contest altogether.
+ * Whether each person gained or lost ground on the person just above them
+ * (the leader: on second place) since you last looked. Rank arrows only move
+ * on an overtake; this is the chase in between.
  */
-export function momentum(people: PersonView[], range: Range): Record<string, Momentum | null> {
+export function momentum(
+  people: PersonView[], range: Range, look: Look | null, viewerDay: string,
+): Record<string, Momentum | null> {
+  const then = scoresThen(look, range, viewerDay);
+  const ranked = rankBy(people, (p) => scoreNow(p, range));
   const out: Record<string, Momentum | null> = {};
-  const noHistory = people.every((p) => scoreAsOf(p, range, 1) === 0);
-  const ranked = rankBy(people, (p) => scoreAsOf(p, range, 0));
   ranked.forEach((p, i) => {
     const rival = i === 0 ? ranked[1] : ranked[i - 1];
-    if (range === "today" || noHistory || !rival) { out[p.profile.id] = null; return; }
-    const margin = (back: number) => scoreAsOf(p, range, back) - scoreAsOf(rival, range, back);
-    const change = margin(0) - margin(1);
+    if (!then || !rival) { out[p.profile.id] = null; return; }
+    const change = (scoreNow(p, range) - scoreNow(rival, range)) - (then(p) - then(rival));
     out[p.profile.id] = change === 0 ? null : {
       dir: change > 0 ? 1 : -1,
       amount: Math.abs(change),
@@ -127,6 +176,16 @@ export function momentum(people: PersonView[], range: Range): Record<string, Mom
     };
   });
   return out;
+}
+
+/** "since you last looked" for a look earlier today, else "since Saturday" or "since Sep 1". */
+export function sinceWhen(at: number, now: number): string {
+  const then = new Date(at);
+  if (then.toDateString() === new Date(now).toDateString()) return "since you last looked";
+  if (now - at > 6 * 86_400_000) {
+    return `since ${then.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  }
+  return `since ${then.toLocaleDateString("en-US", { weekday: "long" })}`;
 }
 
 /**

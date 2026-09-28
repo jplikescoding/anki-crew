@@ -19,4 +19,26 @@ describe("StatTiles", () => {
     render(<StatTiles people={[jp]} viewer="jp" />);
     expect(screen.getByText("Oct 29, 2025")).toBeTruthy();
   });
+
+  it("compares this week with the same days of last week", () => {
+    // Wednesday 23 Sep: Mon–Wed this week vs Mon–Wed last week, not all of last week.
+    const p: PersonView = {
+      ...jp,
+      meta: { ...jp.meta, todayKey: "2026-09-23" },
+      days: [day("2026-09-14", 10), day("2026-09-16", 10), day("2026-09-17", 1000),
+             day("2026-09-21", 15), day("2026-09-23", 15)],
+    };
+    render(<StatTiles people={[p]} viewer="jp" />);
+    expect(screen.getByText("▲ 50% on this point last week")).toBeTruthy();
+  });
+
+  it("ignores a streak the publisher reported once it has lapsed", () => {
+    const lapsed: PersonView = {
+      ...jp,
+      meta: { ...jp.meta, streak: 9, todayKey: "2026-09-23" },
+      days: [day("2026-09-18", 5), day("2026-09-19", 5)],
+    };
+    render(<StatTiles people={[lapsed]} viewer="jp" />);
+    expect(screen.getByText("nobody has one yet")).toBeTruthy();
+  });
 });

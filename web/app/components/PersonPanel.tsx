@@ -1,5 +1,5 @@
 "use client";
-import { deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
+import { currentStreak, deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
 import { plainText, resolveCard } from "@/lib/fields";
 import type { FeedItem, FieldMaps, PersonView } from "@/lib/types";
 import { StatTile, StreakStar } from "@/app/components/primitives";
@@ -67,7 +67,7 @@ export default function PersonPanel({ person, items, fieldMaps }: {
           delay={420}
           help="Consecutive days with at least one review. The star changes at 3, 7, 14, 30 and 100 days."
         >
-          <StreakStar streak={person.meta.streak} />
+          <StreakStar streak={currentStreak(person.days, person.meta.todayKey)} />
         </StatTile>
         {/* Wide, so the date has room for its year on a phone. */}
         <div className="col-span-2 grid">

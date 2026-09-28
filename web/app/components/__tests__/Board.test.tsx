@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import Board from "@/app/components/Board";
-import type { DayRow, PersonView } from "@/lib/types";
+import type { DayRow, Look, PersonView } from "@/lib/types";
 
 function day(date: string, over: Partial<DayRow> = {}): DayRow {
   return { date, reviews: 0, minutes: 0, newCards: 0, ease1: 0, ease2: 0,
@@ -58,11 +58,12 @@ describe("Board", () => {
     expect(screen.getByTestId("stale-jp")).toBeTruthy();
   });
 
-  it("sums the whole week when range is week", () => {
+  it("counts this week from Monday", () => {
+    // 21 Sep 2026 is a Monday; the Sunday before belongs to last week.
     const busy = person("jp", "JP", "America/New_York", [
       day("2026-09-20", { reviews: 100 }), day("2026-09-21", { reviews: 43 })]);
     render(<Board people={[busy]} viewer="jp" range="week" />);
-    expect(within(screen.getByTestId("row-jp")).getByTestId("reviews").textContent).toBe("143");
+    expect(within(screen.getByTestId("row-jp")).getByTestId("reviews").textContent).toBe("43");
   });
 
   it("renders an empty state when nobody has published", () => {
@@ -70,41 +71,41 @@ describe("Board", () => {
     expect(screen.getByTestId("board-empty")).toBeTruthy();
   });
 
-  it("moves the arrows with the range", () => {
-    // JP overtook Andy today, but Andy's big day earlier in the week keeps him
-    // ahead on the week both yesterday and today.
-    const jp = person("jp", "JP", "America/New_York",
-      [day("2026-09-20", { reviews: 0 }), day("2026-09-21", { reviews: 200 })]);
-    const andy = person("andy", "Andy", "America/New_York",
-      [day("2026-09-16", { reviews: 900 }), day("2026-09-20", { reviews: 50 })]);
-    const { rerender } = render(<Board people={[jp, andy]} viewer="jp" range="today" />);
+  const NY = "America/New_York";
+  const lookAt = (jp: number, andy: number): Look => ({
+    at: Date.now(), day: "2026-09-21", week: "2026-09-21",
+    scores: { jp: { today: jp, week: jp, all: jp }, andy: { today: andy, week: andy, all: andy } },
+  });
+
+  it("moves the arrows since you last looked", () => {
+    const jp = person("jp", "JP", NY, [day("2026-09-21", { reviews: 200 })]);
+    const andy = person("andy", "Andy", NY, [day("2026-09-21", { reviews: 150 })]);
+    render(<Board people={[jp, andy]} viewer="jp" range="today" look={lookAt(10, 100)} />);
     expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+    expect(screen.getByTestId("delta-jp")).toHaveAttribute("title", "Up 1 since you last looked");
     expect(screen.getByTestId("delta-andy").textContent).toBe("▼1");
-
-    rerender(<Board people={[jp, andy]} viewer="jp" range="week" />);
-    expect(screen.queryByTestId("delta-jp")).toBeNull();
-    expect(screen.queryByTestId("delta-andy")).toBeNull();
   });
 
-  it("shows who gained ground on the week when nobody changed places", () => {
-    const jp = person("jp", "JP", "America/New_York",
-      [day("2026-09-20", { reviews: 0 }), day("2026-09-21", { reviews: 200 })]);
-    const andy = person("andy", "Andy", "America/New_York",
-      [day("2026-09-16", { reviews: 900 }), day("2026-09-20", { reviews: 50 })]);
-    render(<Board people={[jp, andy]} viewer="jp" range="week" />);
-    const up = screen.getByTestId("momentum-jp");
-    expect(up.textContent).toBe("▲");
-    expect(up).toHaveAttribute("title", "200 closer to Andy since yesterday");
-    expect(screen.getByTestId("momentum-andy")).toHaveAttribute("title", "Lead over JP shrank by 200 since yesterday");
-  });
-
-  it("keeps Today to rank arrows only", () => {
-    const jp = person("jp", "JP", "America/New_York",
-      [day("2026-09-20", { reviews: 0 }), day("2026-09-21", { reviews: 20 })]);
-    const andy = person("andy", "Andy", "America/New_York",
-      [day("2026-09-20", { reviews: 50 }), day("2026-09-21", { reviews: 90 })]);
+  it("shows no arrows on a first visit", () => {
+    const jp = person("jp", "JP", NY, [day("2026-09-21", { reviews: 200 })]);
+    const andy = person("andy", "Andy", NY, [day("2026-09-21", { reviews: 150 })]);
     render(<Board people={[jp, andy]} viewer="jp" range="today" />);
+    expect(screen.queryByTestId("delta-jp")).toBeNull();
     expect(screen.queryByTestId("momentum-jp")).toBeNull();
-    expect(screen.queryByTestId("momentum-andy")).toBeNull();
+  });
+
+  it("shows the chase when nobody changed places", () => {
+    const jp = person("jp", "JP", NY, [day("2026-09-21", { reviews: 40 })]);
+    const andy = person("andy", "Andy", NY, [day("2026-09-21", { reviews: 100 })]);
+    render(<Board people={[jp, andy]} viewer="jp" range="week" look={lookAt(10, 90)} />);
+    expect(screen.getByTestId("momentum-jp").textContent).toBe("▲");
+    expect(screen.getByTestId("momentum-jp")).toHaveAttribute("title", "20 closer to Andy since you last looked");
+  });
+
+  it("counts the days left in the week on your gap line", () => {
+    const jp = person("jp", "JP", NY, [day("2026-09-21", { reviews: 40 })]);
+    const andy = person("andy", "Andy", NY, [day("2026-09-21", { reviews: 100 })]);
+    render(<Board people={[jp, andy]} viewer="jp" range="week" />);
+    expect(screen.getByTestId("gap-line")).toHaveTextContent("60 behind Andy · 6 days left");
   });
 });

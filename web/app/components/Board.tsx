@@ -1,9 +1,10 @@
 "use client";
 import {
-  crewDailyTotals, gapToNext, momentum, rankBy, rankDeltas, retention, shiftDays, totals, weekStart, windowFrom,
+  crewDailyTotals, currentStreak, daysLeftInWeek, gapToNext, momentum, rankBy, rankDeltas, retention,
+  scoreNow, shiftDays, sinceWhen, totals, weekStart, windowFrom,
 } from "@/lib/metrics";
 import type { Momentum, Range } from "@/lib/metrics";
-import type { DayRow, PersonView } from "@/lib/types";
+import type { DayRow, Look, PersonView } from "@/lib/types";
 import { Avatar } from "@/app/components/Avatar";
 import { CountUp, StreakStar, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
 
@@ -28,7 +29,7 @@ function daysFor(person: PersonView, range: Range): DayRow[] {
  * January. Returns null for a zone Intl does not know, including the literal
  * "local" that setup.py writes when nobody typed a timezone.
  */
-function tzTag(tz: string, dateKey: string): string | null {
+export function tzTag(tz: string, dateKey: string): string | null {
   try {
     const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
       .formatToParts(new Date(dateKey));
@@ -47,11 +48,11 @@ function sinceLabel(ms: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-function momentumLabel(m: Momentum): string {
-  if (m.leading) return `Lead over ${m.rival} ${m.dir > 0 ? "grew" : "shrank"} by ${m.amount} since yesterday`;
+function momentumLabel(m: Momentum, since: string): string {
+  if (m.leading) return `Lead over ${m.rival} ${m.dir > 0 ? "grew" : "shrank"} by ${m.amount} ${since}`;
   return m.dir > 0
-    ? `${m.amount} closer to ${m.rival} since yesterday`
-    : `${m.amount} further behind ${m.rival} since yesterday`;
+    ? `${m.amount} closer to ${m.rival} ${since}`
+    : `${m.amount} further behind ${m.rival} ${since}`;
 }
 
 function trackFor(person: PersonView): TrackDay[] {
@@ -69,13 +70,15 @@ function trackFor(person: PersonView): TrackDay[] {
 }
 
 export default function Board({
-  people, viewer, range, seen, justPassed, onSelect,
+  people, viewer, range, seen, justPassed, look, onSelect,
 }: {
   people: PersonView[];
   viewer: string | null;
   range: Range;
   seen?: Record<string, number>;
   justPassed?: string | null;
+  /** What you saw on your previous visit; arrows compare against it. */
+  look?: Look | null;
   /** Opens that person's panel. A row that reacts to a click should go somewhere. */
   onSelect?: (id: string) => void;
 }) {
@@ -92,17 +95,21 @@ export default function Board({
     );
   }
 
-  const score = (p: PersonView) => totals(daysFor(p, range)).reviews;
-  const ranked = rankBy(people, score);
-  const deltas = rankDeltas(people, range);
-  const moves = momentum(people, range);
-  const gap = gapToNext(people, viewer, score);
-  const crewToday = crewDailyTotals(people, people[0].meta.todayKey, 1)[0]?.total ?? 0;
   // Only zones that differ from the viewer's get a tag: labelling everyone is
   // noise, and the tag exists so a lagging "today" reads as a timezone rather
   // than as somebody slacking.
   const home = people.find((p) => p.profile.id === viewer) ?? people[0];
   const homeTag = tzTag(home.profile.tz, home.meta.todayKey);
+  const viewerDay = home.meta.todayKey;
+  const score = (p: PersonView) => scoreNow(p, range);
+  const ranked = rankBy(people, score);
+  const deltas = rankDeltas(people, range, look ?? null, viewerDay);
+  const moves = momentum(people, range, look ?? null, viewerDay);
+  const since = look ? sinceWhen(look.at, Date.now()) : "";
+  const gap = gapToNext(people, viewer, score);
+  const left = daysLeftInWeek(viewerDay);
+  const weekTail = range !== "week" ? "" : left === 0 ? " · last day" : ` · ${left} day${left === 1 ? "" : "s"} left`;
+  const crewToday = crewDailyTotals(people, people[0].meta.todayKey, 1)[0]?.total ?? 0;
 
   return (
     <section>
@@ -149,7 +156,7 @@ export default function Board({
                       data-testid={`delta-${id}`}
                       className="text-[9px] font-semibold leading-none"
                       style={{ color: delta > 0 ? "var(--jade)" : "var(--rose)" }}
-                      title={delta > 0 ? `Up ${delta} since yesterday` : `Down ${-delta} since yesterday`}
+                      title={delta > 0 ? `Up ${delta} ${since}` : `Down ${-delta} ${since}`}
                     >
                       {delta > 0 ? "▲" : "▼"}{Math.abs(delta)}
                     </span>
@@ -160,7 +167,7 @@ export default function Board({
                       data-testid={`momentum-${id}`}
                       className="text-[8px] leading-none opacity-75"
                       style={{ color: move.dir > 0 ? "var(--jade)" : "var(--rose)" }}
-                      title={momentumLabel(move)}
+                      title={momentumLabel(move, since)}
                     >
                       {move.dir > 0 ? "▲" : "▼"}
                     </span>
@@ -222,7 +229,7 @@ export default function Board({
                     </div>
                   </div>
                   <div className="hidden text-right text-[13px] sm:block" style={{ color: "var(--ink-dim)" }}>
-                    <StreakStar streak={p.meta.streak} />
+                    <StreakStar streak={currentStreak(p.days, p.meta.todayKey)} />
                     <div data-testid="retention" className="mt-[3px] text-[11.5px]" style={{ color: ret === null ? "var(--ink-ghost)" : "var(--jade)" }}>
                       {ret === null ? "—" : `${ret}%`}
                     </div>
@@ -237,11 +244,11 @@ export default function Board({
                   {justPassed ? (
                     <>You passed <b style={{ color: "var(--violet-soft)" }}>{justPassed}</b> while you were away — {gap.amount} ahead now.</>
                   ) : gap.kind === "leading" ? (
-                    <>Leading <b style={{ color: "var(--ink)" }}>{gap.name}</b> by {gap.amount}.</>
+                    <>Leading <b style={{ color: "var(--ink)" }}>{gap.name}</b> by {gap.amount}{weekTail}.</>
                   ) : gap.amount === 0 ? (
-                    <>Level with <b style={{ color: "var(--ink)" }}>{gap.name}</b>. One card breaks the tie.</>
+                    <>Level with <b style={{ color: "var(--ink)" }}>{gap.name}</b>. One card breaks the tie{weekTail}.</>
                   ) : (
-                    <><b style={{ color: "var(--cyan-soft)" }}>{gap.amount}</b> behind {gap.name}.</>
+                    <><b style={{ color: "var(--cyan-soft)" }}>{gap.amount}</b> behind {gap.name}{weekTail}</>
                   )}
                 </p>
               )}

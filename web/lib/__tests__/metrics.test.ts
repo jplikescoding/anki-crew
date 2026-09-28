@@ -46,12 +46,20 @@ describe("windowFrom", () => {
 });
 
 describe("weekStart", () => {
-  it("returns the date six days before today, inclusive of today", () => {
-    expect(weekStart("2026-09-21")).toBe("2026-09-15");
+  it("returns the Monday of the week", () => {
+    expect(weekStart("2026-10-01")).toBe("2026-09-28"); // Thursday
+  });
+
+  it("is the day itself on a Monday", () => {
+    expect(weekStart("2026-09-28")).toBe("2026-09-28");
+  });
+
+  it("goes back six days on a Sunday", () => {
+    expect(weekStart("2026-10-04")).toBe("2026-09-28");
   });
 
   it("crosses a month boundary", () => {
-    expect(weekStart("2026-10-03")).toBe("2026-09-27");
+    expect(weekStart("2026-10-02")).toBe("2026-09-28");
   });
 });
 

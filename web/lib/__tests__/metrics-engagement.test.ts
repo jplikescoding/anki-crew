@@ -1,15 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  rankDeltas,
-  momentum,
-  currentDayKey,
-  gapToNext,
-  streakTier,
-  personalBest,
-  crewDailyTotals,
-  STREAK_TIERS,
+  rankDeltas, momentum, currentDayKey, gapToNext, streakTier, personalBest, crewDailyTotals, STREAK_TIERS,
+  currentStreak, bestStreak, daysLeftInWeek, sinceWhen, weekStart,
 } from "@/lib/metrics";
-import type { DayRow, PersonView } from "@/lib/types";
+import type { DayRow, Look, LookScores, PersonView } from "@/lib/types";
 
 function day(date: string, reviews: number): DayRow {
   return {
@@ -32,105 +26,113 @@ function person(id: string, name: string, days: DayRow[], streak = 0): PersonVie
 const TODAY = "2026-09-21";
 const YESTERDAY = "2026-09-20";
 
+function look(scores: Record<string, Partial<LookScores>>, day = TODAY, at = 0): Look {
+  return {
+    at, day, week: weekStart(day),
+    scores: Object.fromEntries(Object.entries(scores).map(([id, s]) => [id, { today: 0, week: 0, all: 0, ...s }])),
+  };
+}
+
 describe("rankDeltas", () => {
-  it("reports a climb as positive", () => {
-    // JP was second yesterday, first today.
-    const jp = person("jp", "JP", [day(YESTERDAY, 10), day(TODAY, 300)]);
-    const pete = person("peter", "Peter", [day(YESTERDAY, 200), day(TODAY, 100)]);
-    const d = rankDeltas([jp, pete], "today");
-    expect(d.jp).toBe(1);
-    expect(d.peter).toBe(-1);
+  const jp = person("jp", "JP", [day(TODAY, 30)]);
+  const pete = person("peter", "Peter", [day(TODAY, 20)]);
+
+  it("reports a climb since you last looked as positive", () => {
+    expect(rankDeltas([jp, pete], "today", look({ jp: { today: 5 }, peter: { today: 10 } }), TODAY))
+      .toEqual({ jp: 1, peter: -1 });
   });
 
-  it("is zero when nothing moved", () => {
-    const jp = person("jp", "JP", [day(YESTERDAY, 300), day(TODAY, 300)]);
-    const pete = person("peter", "Peter", [day(YESTERDAY, 100), day(TODAY, 100)]);
-    expect(rankDeltas([jp, pete], "today")).toEqual({ jp: 0, peter: 0 });
+  it("is zero on a first visit", () => {
+    expect(rankDeltas([jp, pete], "today", null, TODAY)).toEqual({ jp: 0, peter: 0 });
   });
 
-  it("treats a missing yesterday as no movement rather than a fake climb", () => {
-    const jp = person("jp", "JP", [day(TODAY, 300)]);
-    const pete = person("peter", "Peter", [day(TODAY, 100)]);
-    expect(rankDeltas([jp, pete], "today")).toEqual({ jp: 0, peter: 0 });
+  it("is zero on Today once the day has rolled over since the look", () => {
+    expect(rankDeltas([jp, pete], "today", look({ jp: { today: 5 }, peter: { today: 10 } }, YESTERDAY), TODAY))
+      .toEqual({ jp: 0, peter: 0 });
   });
 
-  it("handles a single person", () => {
-    expect(rankDeltas([person("jp", "JP", [day(TODAY, 5)])], "today")).toEqual({ jp: 0 });
+  it("is zero on the week once a new week has started", () => {
+    // TODAY (21 Sep 2026) is a Monday, so a look from the day before belongs to last week.
+    expect(rankDeltas([jp, pete], "week", look({ jp: { week: 5 }, peter: { week: 10 } }, YESTERDAY), TODAY))
+      .toEqual({ jp: 0, peter: 0 });
   });
 
-  it("compares each person on their own day, not someone else's", () => {
-    // Peter is a day ahead. His today (22nd) beats JP's today (21st), and
-    // yesterday it was the other way round, so Peter climbed.
-    const jp = person("jp", "JP", [day("2026-09-20", 50), day(TODAY, 100)]);
-    const pete = person("peter", "Peter", [day(TODAY, 10), day("2026-09-22", 300)]);
-    pete.meta.todayKey = "2026-09-22";
-    expect(rankDeltas([jp, pete], "today")).toEqual({ jp: -1, peter: 1 });
-  });
-
-  it("ranks the week on the seven days ending today vs ending yesterday", () => {
-    // Today alone JP overtakes, but over the week Peter is still ahead both
-    // days, so nobody moved.
-    const jp = person("jp", "JP", [day(YESTERDAY, 0), day(TODAY, 200)]);
-    const pete = person("peter", "Peter", [day("2026-09-16", 500), day(YESTERDAY, 300), day(TODAY, 0)]);
-    expect(rankDeltas([jp, pete], "today")).toEqual({ jp: 1, peter: -1 });
-    expect(rankDeltas([jp, pete], "week")).toEqual({ jp: 0, peter: 0 });
-  });
-
-  it("drops the day that fell out of the week window", () => {
-    // Yesterday's window (09-14..09-20) still held Peter's big day; today's doesn't.
-    const jp = person("jp", "JP", [day(YESTERDAY, 100), day(TODAY, 100)]);
-    const pete = person("peter", "Peter", [day("2026-09-14", 500), day(TODAY, 50)]);
-    expect(rankDeltas([jp, pete], "week")).toEqual({ jp: 1, peter: -1 });
-  });
-
-  it("ranks all time on the total vs the total before today", () => {
-    const jp = person("jp", "JP", [day("2026-01-01", 1000), day(TODAY, 0)]);
-    const pete = person("peter", "Peter", [day("2026-01-01", 900), day(TODAY, 200)]);
-    expect(rankDeltas([jp, pete], "all")).toEqual({ jp: -1, peter: 1 });
+  it("ranks all time against the look's totals", () => {
+    expect(rankDeltas([jp, pete], "all", look({ jp: { all: 1 }, peter: { all: 2 } }, YESTERDAY), TODAY))
+      .toEqual({ jp: 1, peter: -1 });
   });
 });
 
 describe("momentum", () => {
-  // Week ending yesterday: Adam 700, JP 40. Today JP does 34, Adam nothing.
-  const adam = () => person("adam", "Adam", [day("2026-09-16", 700), day(TODAY, 0)]);
-  const jp = () => person("jp", "JP", [day(YESTERDAY, 40), day(TODAY, 34)]);
+  const jp = person("jp", "JP", [day(TODAY, 40)]);
+  const pete = person("peter", "Peter", [day(TODAY, 100)]);
 
   it("says the chaser gained on the person above and the leader lost ground", () => {
-    expect(momentum([adam(), jp()], "week")).toEqual({
-      adam: { dir: -1, amount: 34, rival: "JP", leading: true },
-      jp: { dir: 1, amount: 34, rival: "Adam", leading: false },
-    });
-  });
-
-  it("counts a big day falling out of the window", () => {
-    // Peter's 09-14 day was in yesterday's window, not today's.
-    const j = person("jp", "JP", [day(YESTERDAY, 100), day(TODAY, 0)]);
-    const pete = person("peter", "Peter", [day("2026-09-14", 50), day(YESTERDAY, 200)]);
-    expect(momentum([j, pete], "week")).toMatchObject({
-      peter: { dir: -1, amount: 50, rival: "JP", leading: true },
-      jp: { dir: 1, amount: 50, rival: "Peter", leading: false },
-    });
+    const m = momentum([jp, pete], "today", look({ jp: { today: 10 }, peter: { today: 90 } }), TODAY);
+    expect(m.jp).toEqual({ dir: 1, amount: 20, rival: "Peter", leading: false });
+    expect(m.peter).toEqual({ dir: -1, amount: 20, rival: "JP", leading: true });
   });
 
   it("is null when the gap didn't change", () => {
-    const a = person("adam", "Adam", [day(YESTERDAY, 100), day(TODAY, 10)]);
-    const j = person("jp", "JP", [day(YESTERDAY, 50), day(TODAY, 10)]);
-    expect(momentum([a, j], "week")).toEqual({ adam: null, jp: null });
+    const m = momentum([jp, pete], "today", look({ jp: { today: 0 }, peter: { today: 60 } }), TODAY);
+    expect(m).toEqual({ jp: null, peter: null });
   });
 
-  it("compares with the person just above, not the leader", () => {
-    const a = person("adam", "Adam", [day(YESTERDAY, 900), day(TODAY, 0)]);
-    const p = person("peter", "Peter", [day(YESTERDAY, 500), day(TODAY, 0)]);
-    const j = person("jp", "JP", [day(YESTERDAY, 100), day(TODAY, 20)]);
-    expect(momentum([a, p, j], "week").jp).toEqual({ dir: 1, amount: 20, rival: "Peter", leading: false });
-    expect(momentum([a, p, j], "week").peter).toBeNull();
+  it("is null without a look", () => {
+    expect(momentum([jp, pete], "today", null, TODAY)).toEqual({ jp: null, peter: null });
+  });
+});
+
+describe("currentStreak", () => {
+  it("counts back from today", () => {
+    expect(currentStreak([day("2026-09-19", 1), day("2026-09-20", 1), day(TODAY, 1)], TODAY)).toBe(3);
   });
 
-  it("has nothing to say with no yesterday, one person, or on Today", () => {
-    expect(momentum([person("adam", "Adam", [day(TODAY, 9)]), person("jp", "JP", [day(TODAY, 3)])], "week"))
-      .toEqual({ adam: null, jp: null });
-    expect(momentum([jp()], "week")).toEqual({ jp: null });
-    expect(momentum([adam(), jp()], "today")).toEqual({ adam: null, jp: null });
+  it("counts from yesterday while today is still empty", () => {
+    expect(currentStreak([day("2026-09-19", 1), day(YESTERDAY, 1)], TODAY)).toBe(2);
+  });
+
+  it("is 0 once a whole day was missed, whatever the publisher last said", () => {
+    expect(currentStreak([day("2026-09-18", 1), day("2026-09-19", 1)], TODAY)).toBe(0);
+  });
+
+  it("ignores days with no reviews", () => {
+    expect(currentStreak([day(YESTERDAY, 0), day(TODAY, 5)], TODAY)).toBe(1);
+  });
+});
+
+describe("bestStreak", () => {
+  it("finds the longest run ever", () => {
+    const days = ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-05", "2026-09-06"].map((d) => day(d, 1));
+    expect(bestStreak(days)).toBe(3);
+  });
+
+  it("is 0 with no history", () => {
+    expect(bestStreak([])).toBe(0);
+  });
+});
+
+describe("daysLeftInWeek", () => {
+  it("is 6 on a Monday and 0 on a Sunday", () => {
+    expect(daysLeftInWeek("2026-09-28")).toBe(6);
+    expect(daysLeftInWeek("2026-10-04")).toBe(0);
+  });
+});
+
+describe("sinceWhen", () => {
+  it("says 'since you last looked' the same day", () => {
+    expect(sinceWhen(new Date(2026, 8, 28, 8).getTime(), new Date(2026, 8, 28, 9).getTime()))
+      .toBe("since you last looked");
+  });
+
+  it("names the weekday of an earlier look", () => {
+    expect(sinceWhen(new Date(2026, 8, 26, 12).getTime(), new Date(2026, 8, 28, 9).getTime()))
+      .toBe("since Saturday");
+  });
+
+  it("dates a look more than six days old", () => {
+    expect(sinceWhen(new Date(2026, 8, 1, 12).getTime(), new Date(2026, 8, 28, 9).getTime()))
+      .toBe("since Sep 1");
   });
 });
 

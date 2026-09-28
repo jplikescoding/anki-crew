@@ -112,3 +112,12 @@ export type CrewNote = {
   editedAt?: number;
   card?: NoteCard;
 };
+
+/** Everyone's scores as a viewer last saw them, for the "since you last looked" arrows. */
+export type LookScores = { today: number; week: number; all: number };
+export type Look = {
+  at: number;              // epoch ms of that page load
+  day: string;             // the viewer's day key then
+  week: string;            // the Monday of that day
+  scores: Record<string, LookScores>;
+};

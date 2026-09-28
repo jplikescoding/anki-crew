@@ -1,5 +1,5 @@
 "use client";
-import { personalBest, shiftDays, totals, weekStart, windowFrom } from "@/lib/metrics";
+import { currentStreak, personalBest, shiftDays, totals, weekStart } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
 import { StatTile } from "@/app/components/primitives";
 
@@ -30,18 +30,19 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
     ? `${Math.round(bestRow.minutes)} min · ${bestRow.newCards} new`
     : undefined;
 
-  const thisWeek = people.reduce(
-    (s, p) => s + totals(windowFrom(p.days, weekStart(todayKey))).reviews, 0);
-  const lastWeekStart = shiftDays(weekStart(todayKey), -7);
-  const lastWeek = people.reduce((s, p) => {
-    const rows = p.days.filter((d) => d.date >= lastWeekStart && d.date < weekStart(todayKey));
-    return s + totals(rows).reviews;
-  }, 0);
+  // This week so far against the same days of last week: a Wednesday shouldn't
+  // look like a collapse just because last week had a Thursday to Sunday.
+  const monday = weekStart(todayKey);
+  const inRange = (from: string, to: string) => people.reduce(
+    (s, p) => s + totals(p.days.filter((d) => d.date >= from && d.date <= to)).reviews, 0);
+  const thisWeek = inRange(monday, todayKey);
+  const lastWeek = inRange(shiftDays(monday, -7), shiftDays(todayKey, -7));
   const trend = lastWeek === 0 ? null : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
 
-  const longest = people.reduce(
-    (top, p) => (p.meta.streak > top.streak ? { streak: p.meta.streak, who: p.profile.displayName } : top),
-    { streak: 0, who: "" });
+  const longest = people.reduce((top, p) => {
+    const streak = currentStreak(p.days, p.meta.todayKey);
+    return streak > top.streak ? { streak, who: p.profile.displayName } : top;
+  }, { streak: 0, who: "" });
 
   return (
     <div className="grid grid-cols-3 gap-2.5 px-3 pt-3">
@@ -60,12 +61,12 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
         label="Crew this week"
         value="—"
         numeric={thisWeek}
-        sub={trend === null ? "first week on record" : `${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)}% on last week`}
-        more={lastWeek > 0 ? `${lastWeek.toLocaleString()} the week before` : undefined}
+        sub={trend === null ? "first week on record" : `${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend)}% on this point last week`}
+        more={lastWeek > 0 ? `${lastWeek.toLocaleString()} by this point last week` : undefined}
         tint="var(--cyan-soft)"
         glow="rgba(6,182,212,.16)"
         delay={200}
-        help="Everyone's reviews over the last seven days, added together, against the seven days before that."
+        help="Everyone's reviews since Monday, added together, against the same days of last week."
       />
       <StatTile
         label="Longest streak"

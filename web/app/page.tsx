@@ -391,7 +391,7 @@ export default function Page() {
                   color: range === r ? "var(--ink)" : "var(--ink-faint)",
                 }}
               >
-                {r === "all" ? "all time" : r}
+                {r === "all" ? "all time" : r === "week" ? "this week" : r}
               </button>
             ))}
           </div>
@@ -529,7 +529,7 @@ export default function Page() {
           <div className="pane w-full max-w-xs px-5 py-4" style={{ background: "#12172A" }} onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-3 text-[13px] font-semibold">Shortcuts</h2>
             <dl className="space-y-1.5 text-[12px]" style={{ color: "var(--ink-dim)" }}>
-              {[["1 2 3 4", "Board, Feed, Notes, You"], ["t w a", "Today, week, all time"], ["n", "Next unread comment"], ["g", "Back to top"], ["r", "Refresh"], ["?", "This list"]].map(
+              {[["1 2 3 4", "Board, Feed, Notes, You"], ["t w a", "Today, this week, all time"], ["n", "Next unread comment"], ["g", "Back to top"], ["r", "Refresh"], ["?", "This list"]].map(
                 ([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <dt><kbd className="rounded px-1.5 py-0.5" style={{ background: "var(--pane-lift)", color: "var(--ink)" }}>{k}</kbd></dt>
