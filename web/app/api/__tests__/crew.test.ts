@@ -13,6 +13,7 @@ const { getSeen, store } = vi.hoisted(() => ({
     feed: [] as FeedItem[],
     fieldMaps: {} as Record<string, Record<string, Record<string, string>>>,
     statuses: null as Record<string, string> | null,
+    notes: [] as unknown[],
   },
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@/lib/store", () => ({
   listUsers: async () => ["jp"],
   getPerson: async (id: string) => (id === "jp" ? person : null),
   getFeed: async () => store.feed,
+  getNotes: async () => store.notes,
   getEngagement: async () => ({}),
   getSeen,
   getNoteTypes: async (id: string) => (id === "jp" ? { T: ["Expression", "Meaning"] } : {}),
@@ -37,6 +39,7 @@ describe("GET /api/crew", () => {
     store.feed = [];
     store.fieldMaps = {};
     store.statuses = null;
+    store.notes = [];
   });
 
   it("rejects a missing key", async () => {
@@ -56,6 +59,12 @@ describe("GET /api/crew", () => {
     expect(json.viewer).toBe("jp");
     expect(json.people).toHaveLength(1);
     expect(json.people[0].profile.displayName).toBe("JP");
+  });
+
+  it("includes every crew note", async () => {
+    store.notes = [{ id: "peter:1:ab", user: "peter", text: "hi", createdAt: 1 }];
+    const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
+    expect((await res.json()).notes).toEqual(store.notes);
   });
 
   it("includes what the viewer has read", async () => {

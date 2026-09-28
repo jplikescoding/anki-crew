@@ -3,7 +3,7 @@ import { deckWord } from "@/lib/fields";
 import { userForReadKey } from "@/lib/identity";
 import { currentDayKey } from "@/lib/metrics";
 import {
-  getEngagement, getFeed, getFieldMaps, getNoteTypes, getPerson, getSeen, getWordStatuses, listUsers,
+  getEngagement, getFeed, getFieldMaps, getNotes, getNoteTypes, getPerson, getSeen, getWordStatuses, listUsers,
 } from "@/lib/store";
 import type { CrewResponse, DeckStatus, FieldMaps, PersonView } from "@/lib/types";
 
@@ -44,7 +44,8 @@ export async function GET(req: Request) {
   if (statuses) for (const [id, word] of wanted) inMyDeck[id] = statuses[word] ?? "none";
 
   const noteTypes = await getNoteTypes(viewer);
+  const notes = await getNotes();
 
-  const body: CrewResponse = { viewer, people, feed, engagement, seen, fieldMaps, noteTypes, inMyDeck };
+  const body: CrewResponse = { viewer, people, feed, engagement, seen, fieldMaps, noteTypes, inMyDeck, notes };
   return NextResponse.json(body);
 }
