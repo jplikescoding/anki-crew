@@ -29,9 +29,12 @@ exist.
 
 - Header becomes `Board · Feed · Notes · You`. Keys `1`–`4` follow that order,
   so **You moves from `3` to `4`**; the `?` shortcuts panel is updated.
-- Person chips across the top: `Everyone` plus one per crew member, built from
-  `people` (never hard-coded — the crew is five now and changes). Reuses the
-  feed's `Toggle` chip look. Session-only; resets to Everyone.
+- One compact person filter beside `+ New note`, not a row of chips: a styled
+  `<select>` (same look as the card setup selects) reading `Everyone` by
+  default, listing only people who have written at least one note, with counts
+  — `Adam (3)`. Crew members who haven't joined or written anything take no
+  space. Hidden while there are no notes. Session-only; resets to Everyone.
+  If the chosen person's notes all get deleted, it falls back to Everyone.
 - `+ New note` opens a text box at the top of the list.
 - List is newest first (by created time). Each note: author avatar, name,
   relative time ("edited" marker if edited), then the text with line breaks
@@ -41,8 +44,8 @@ exist.
   prefilled. Delete asks `Delete this note?` (inline confirm, not a browser
   dialog) before removing.
 - Empty state (no notes at all): "No notes yet. Tap 📝 on any card in the Feed
-  to add what you learned from it." A person chip with no notes: "No notes from
-  <name> yet."
+  to add what you learned from it." (The filter only lists authors, so a
+  filtered view is never empty.)
 
 ### From the feed
 
@@ -166,7 +169,7 @@ success.
   boundary), grouping by card.
 - `/api/note`: 401, create returns author from key, 403 on someone else's
   edit/delete, 404 on unknown id, `editedAt` set.
-- `Notes` component: chips from people, filter, empty states, edit/delete only
+- `Notes` component: filter lists only authors with counts, filters the list, falls back to Everyone, empty state, edit/delete only
   on own notes, delete confirm, card quote shown.
 - `FeedCard`: `📝 2` count, expand shows that card's notes, saving sends a card
   copy built from the card setup.
