@@ -265,7 +265,7 @@ written by a new `POST /api/competition` (same key-in-query auth as `/api/seen`)
   Pass moments = diff of current order vs this. Acknowledging (or Monday's
   silent update) rewrites it.
 - `results` — week → winner id you were shown, or `"none"` for a tie
-  (`"2026-W40": "adam"`). The **latest** finished week absent here = roundup
+  keyed by the week's Monday (`"2026-09-28": "adam"`). The **latest** finished week absent here = roundup
   pending; older unshown weeks (e.g. you were away two Mondays) are recorded
   silently, only the latest gets a roundup. Present but different from the
   live winner = late-sync moment.
@@ -273,15 +273,19 @@ written by a new `POST /api/competition` (same key-in-query auth as `/api/seen`)
 Validation mirrors `/api/seen`: 401 without a valid key, 400 on malformed
 bodies, ids and week keys length-capped, timestamps capped at now.
 
-`lib/seen.ts` (localStorage last-visit + `whoYouPassed` on today's order) is
-removed; its job moves to the server state above.
+`lib/seen.ts` loses `whoYouPassed` and the stored order (passes move to the
+server state above). It keeps the per-browser today totals that drive the
+"+N since you last looked" header line, the count-up, and What's new's
+"been here before" check.
 
 ### 6.3 Components
 
 - `MomentPill`, `WeeklyRoundup` (modal + beats), `PassMoment` (row animation
   hook on Board), `PlayerCard` (modal), `WeekStrip`.
-- `Avatar` gets an optional `onClick` → opens `PlayerCard`; a single
-  page-level state `cardFor: id | null`.
+- `Avatar` reads a page-level context `{ open(id), champion }`: any avatar
+  with a profile id opens `PlayerCard` on click and wears the gold ring when
+  it's the champion's. No prop drilling through Feed/Notes. Avatars inside
+  other controls (upload button, filter chips) opt out.
 - `PersonPanel` tile grid per §4.4.
 - `lib/sound.ts` unchanged (chime reused).
 - `whatsNew.ts` gets one short blurb for the release.
