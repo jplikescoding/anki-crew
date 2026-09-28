@@ -29,6 +29,7 @@ vi.mock("@/lib/store", () => ({
   getWordStatuses: vi.fn(async (_id: string, words: string[]) =>
     store.statuses === null ? null
       : Object.fromEntries(words.filter((w) => store.statuses![w]).map((w) => [w, store.statuses![w]]))),
+  getCompetition: async (id: string) => ({ results: id === "jp" ? { "2026-09-21": "adam" } : {} }),
 }));
 
 import { GET } from "@/app/api/crew/route";
@@ -71,6 +72,11 @@ describe("GET /api/crew", () => {
     const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
     expect((await res.json()).seen).toEqual({ _floor: 42, "peter:1": 7 });
     expect(getSeen).toHaveBeenCalledWith("jp");
+  });
+
+  it("returns what the viewer has already seen of the competition", async () => {
+    const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
+    expect((await res.json()).competition).toEqual({ results: { "2026-09-21": "adam" } });
   });
 
   describe("each person's day", () => {

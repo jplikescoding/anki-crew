@@ -3,7 +3,7 @@ import { deckWord } from "@/lib/fields";
 import { userForReadKey } from "@/lib/identity";
 import { currentDayKey } from "@/lib/metrics";
 import {
-  getEngagement, getFeed, getFieldMaps, getNotes, getNoteTypes, getPerson, getSeen, getWordStatuses, listUsers,
+  getCompetition, getEngagement, getFeed, getFieldMaps, getNotes, getNoteTypes, getPerson, getSeen, getWordStatuses, listUsers,
 } from "@/lib/store";
 import type { CrewResponse, DeckStatus, FieldMaps, PersonView } from "@/lib/types";
 
@@ -45,7 +45,8 @@ export async function GET(req: Request) {
 
   const noteTypes = await getNoteTypes(viewer);
   const notes = await getNotes();
+  const competition = await getCompetition(viewer);
 
-  const body: CrewResponse = { viewer, people, feed, engagement, seen, fieldMaps, noteTypes, inMyDeck, notes };
+  const body: CrewResponse = { viewer, people, feed, engagement, seen, fieldMaps, noteTypes, inMyDeck, notes, competition };
   return NextResponse.json(body);
 }

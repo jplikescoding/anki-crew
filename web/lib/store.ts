@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import type { Comment, CrewNote, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Meta, PersonView, Profile } from "@/lib/types";
+import type { Comment, CompetitionState, CrewNote, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Look, Meta, PersonView, Profile, Standing } from "@/lib/types";
 import { FLOOR, type SeenMap } from "@/lib/unread";
 
 const redis = new Redis({
@@ -26,6 +26,7 @@ const seenKey = (id: string) => `seen:${id}`;
 const noteTypesKey = (id: string) => `user:${id}:notetypes`;
 const wordsKey = (id: string) => `user:${id}:words`;
 const fieldMapKey = (id: string) => `user:${id}:fieldmap`;
+const competitionKey = (id: string) => `competition:${id}`;
 
 function parse<T>(value: unknown): T {
   return typeof value === "string" ? (JSON.parse(value) as T) : (value as T);
@@ -305,4 +306,32 @@ export async function putNote(note: CrewNote): Promise<void> {
 
 export async function deleteNote(id: string): Promise<void> {
   await redis.hdel(NOTES, id);
+}
+
+/* ------------------------------------------------------------ competition */
+
+const RESULT = "r:";
+
+/**
+ * What this viewer has seen of the weekly race: their last look, the standing
+ * they last acknowledged, and which week results they were shown. One hash, so
+ * a result is one field and marking one never rewrites the others.
+ */
+export async function getCompetition(userId: string): Promise<CompetitionState> {
+  const raw = (await redis.hgetall<Record<string, unknown>>(competitionKey(userId))) ?? {};
+  const out: CompetitionState = { results: {} };
+  for (const [k, v] of Object.entries(raw)) {
+    if (k === "look") out.look = parse<Look>(v);
+    else if (k === "standing") out.standing = parse<Standing>(v);
+    else if (k.startsWith(RESULT)) out.results[k.slice(RESULT.length)] = String(v);
+  }
+  return out;
+}
+
+export async function saveCompetition(userId: string, patch: Partial<CompetitionState>): Promise<void> {
+  const fields: Record<string, string> = {};
+  if (patch.look) fields.look = JSON.stringify(patch.look);
+  if (patch.standing) fields.standing = JSON.stringify(patch.standing);
+  for (const [week, winner] of Object.entries(patch.results ?? {})) fields[RESULT + week] = winner;
+  if (Object.keys(fields).length > 0) await redis.hset(competitionKey(userId), fields);
 }

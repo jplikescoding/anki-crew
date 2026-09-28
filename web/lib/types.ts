@@ -93,6 +93,8 @@ export type CrewResponse = {
   inMyDeck?: Record<string, DeckStatus | "none">;
   /** Every crew note, newest first. */
   notes?: CrewNote[];
+  /** What the viewer has already seen of the weekly race. */
+  competition?: CompetitionState;
 };
 
 /** What a note was written about, frozen when it was written: the feed only keeps recent cards. */
@@ -120,4 +122,15 @@ export type Look = {
   day: string;             // the viewer's day key then
   week: string;            // the Monday of that day
   scores: Record<string, LookScores>;
+};
+
+/** The This week order a viewer last acknowledged. Passes are measured against it. */
+export type Standing = { week: string; order: string[] };
+
+/** Per-viewer competition memory, on the server so each moment plays once across devices. */
+export type CompetitionState = {
+  look?: Look;
+  standing?: Standing;
+  /** A week's Monday -> the winner id you were shown, or "none" for a tie. */
+  results: Record<string, string>;
 };

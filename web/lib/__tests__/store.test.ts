@@ -81,7 +81,7 @@ import {
   saveSnapshot, listUsers, getPerson, getFeed, markEngaged, setReaction, addComment,
   getEngagement, setAvatar, getSeen, markSeen, markAllSeen, FEED_CAP, COMMENT_CAP,
   getNoteTypes, getWordStatuses, getFieldMaps, setFieldMap, WORDS_CHUNK,
-  getNotes, getNote, putNote, deleteNote,
+  getNotes, getNote, putNote, deleteNote, getCompetition, saveCompetition,
 } from "@/lib/store";
 import type { CrewNote, IngestBody, FeedItem } from "@/lib/types";
 
@@ -403,5 +403,22 @@ describe("notes", () => {
     await putNote(n("a", 100));
     state.hashes.get("notes")!.set("junk", JSON.stringify({ nope: true }));
     expect((await getNotes()).map((x) => x.id)).toEqual(["a"]);
+  });
+});
+
+describe("competition state", () => {
+  it("is empty for someone who has never been", async () => {
+    expect(await getCompetition("nobody")).toEqual({ results: {} });
+  });
+
+  it("round-trips a look and a standing, and merges results week by week", async () => {
+    const look = { at: 5, day: "2026-09-29", week: "2026-09-28", scores: { jp: { today: 1, week: 2, all: 3 } } };
+    await saveCompetition("jp", { look, standing: { week: "2026-09-28", order: ["adam", "jp"] }, results: { "2026-09-21": "adam" } });
+    await saveCompetition("jp", { results: { "2026-09-28": "none" } });
+    expect(await getCompetition("jp")).toEqual({
+      look,
+      standing: { week: "2026-09-28", order: ["adam", "jp"] },
+      results: { "2026-09-21": "adam", "2026-09-28": "none" },
+    });
   });
 });
