@@ -91,4 +91,24 @@ export type CrewResponse = {
   noteTypes?: Record<string, string[]>;
   /** Friends' cards only: is that word in the viewer's decks. */
   inMyDeck?: Record<string, DeckStatus | "none">;
+  /** Every crew note, newest first. */
+  notes?: CrewNote[];
+};
+
+/** What a note was written about, frozen when it was written: the feed only keeps recent cards. */
+export type NoteCard = {
+  itemId: string;
+  word: string;
+  meaning: string;
+  sentence?: string;
+};
+
+/** A crew note. Not "Note": whatsNew.ts already has one of those. */
+export type CrewNote = {
+  id: string;              // "<userId>:<createdAt>:<4 base36 chars>"; "tmp:…" until the server answers
+  user: string;
+  text: string;
+  createdAt: number;       // epoch ms, server clock
+  editedAt?: number;
+  card?: NoteCard;
 };

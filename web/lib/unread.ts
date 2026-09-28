@@ -11,6 +11,9 @@ import type { Comment, Engagement } from "@/lib/types";
 /** Reserved field: comments at or before it count as read everywhere. */
 export const FLOOR = "_floor";
 
+/** Reserved field: when you last opened the Notes tab. Notes by others after it are new. */
+export const NOTES_SEEN = "_notes";
+
 /** Card id -> when you last opened its thread, plus FLOOR. */
 export type SeenMap = Record<string, number>;
 
