@@ -83,7 +83,7 @@ export default function FeedFilters({
                 color: on ? "var(--ink)" : "var(--ink-dim)",
               }}
             >
-              <Avatar profile={p.profile} size={16} index={indexOf.get(p.profile.id) ?? 0} />
+              <Avatar profile={p.profile} size={16} index={indexOf.get(p.profile.id) ?? 0} interactive={false} />
               {p.profile.displayName}
             </button>
           );

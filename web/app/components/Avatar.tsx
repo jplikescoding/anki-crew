@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import type { Profile } from "@/lib/types";
 
 const RING = ["var(--violet-soft)", "var(--cyan-soft)", "var(--gold)"];
@@ -10,18 +10,31 @@ function initials(name: string): string {
   return letters.toUpperCase();
 }
 
-export function Avatar({ profile, size = 28, index = 0 }: {
-  profile: Pick<Profile, "displayName" | "avatar">;
+/**
+ * Set once by the page. Any avatar with an id becomes a way into that person's
+ * card, and the champion's wears gold wherever it appears -- no prop threading
+ * through the feed and notes.
+ */
+export const PersonCard = createContext<{ open: (id: string) => void; champion: string | null } | null>(null);
+
+export function Avatar({ profile, size = 28, index = 0, interactive = true }: {
+  profile: Pick<Profile, "displayName" | "avatar"> & { id?: string };
   size?: number;
   index?: number;
+  /** Off where the avatar sits inside another control, like the upload button or a filter chip. */
+  interactive?: boolean;
 }) {
-  const ring = RING[index % RING.length];
-  return (
+  const card = useContext(PersonCard);
+  const crowned = Boolean(profile.id && card?.champion === profile.id);
+  const ring = crowned ? "var(--gold)" : RING[index % RING.length];
+  const face = (
     <span
+      data-crowned={String(crowned)}
       className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border"
       style={{
         width: size, height: size, borderColor: ring,
         background: profile.avatar ? "transparent" : "var(--pane-lift)",
+        boxShadow: crowned ? "0 0 0 1px var(--gold), 0 0 14px rgba(251,191,36,.45)" : undefined,
         fontSize: Math.max(9, size * 0.36),
         fontWeight: 700,
         color: ring,
@@ -32,6 +45,28 @@ export function Avatar({ profile, size = 28, index = 0 }: {
         // eslint-disable-next-line @next/next/no-img-element -- a data URL, already sized to 128px
         ? <img src={profile.avatar} alt="" width={size} height={size} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
         : initials(profile.displayName)}
+    </span>
+  );
+  if (!interactive || !card || !profile.id) return face;
+
+  const id = profile.id;
+  // A span, not a button: feed cards put avatars inside their own button.
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      data-testid={`avatar-${id}`}
+      title={`${profile.displayName}'s card`}
+      className="inline-flex shrink-0 cursor-pointer rounded-full transition-transform duration-150 hover:scale-105"
+      onClick={(e) => { e.stopPropagation(); card.open(id); }}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        card.open(id);
+      }}
+    >
+      {face}
     </span>
   );
 }
@@ -95,7 +130,7 @@ export function AvatarUploader({ profile, index, apiKey, onChange }: {
         title="Change your picture"
         data-testid="avatar-upload"
       >
-        <Avatar profile={profile} size={40} index={index} />
+        <Avatar profile={profile} size={40} index={index} interactive={false} />
       </button>
       <input
         ref={input}

@@ -139,6 +139,13 @@ body {
   animation: overtake-sweep 1100ms ease-out 1;
 }
 
+/* The player card lifts in like a card being dealt. */
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+.card-rise { animation: card-rise 360ms cubic-bezier(.22,.8,.3,1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
