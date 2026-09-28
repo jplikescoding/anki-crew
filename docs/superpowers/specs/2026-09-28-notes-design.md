@@ -81,7 +81,7 @@ type NoteCard = {
   sentence?: string;
 };
 
-type Note = {
+type CrewNote = {   // not "Note": whatsNew.ts already exports a Note
   id: string;         // "<userId>:<createdAt>:<4 random base36 chars>"
   user: string;
   text: string;
@@ -91,12 +91,12 @@ type Note = {
 };
 ```
 
-- Redis hash `notes`: field = note id, value = JSON `Note`. Loaded whole with
+- Redis hash `notes`: field = note id, value = JSON `CrewNote`. Loaded whole with
   one `hgetall`; fine for a crew of five. No cap.
 - The card copy is taken in the browser with the existing `resolveCard` +
   `plainText` (so it matches what everyone saw under the owner's card setup),
   then frozen. Stored as plain text — no `<b>`.
-- `CrewResponse` gains `notes: Note[]`, sorted newest first by the server.
+- `CrewResponse` gains `notes?: CrewNote[]`, sorted newest first by the server.
 
 ## 5. Endpoints and read state
 
@@ -113,7 +113,7 @@ from the body).
 
 Validation (400 unless noted):
 - `text` string, trimmed, 1–1,000 chars.
-- `card` optional; if present: `itemId` 1–128 chars, `word` 1–100,
+- `card` optional; if present: `itemId` 1–128 chars, `word` 0–100 (a card can have an empty front),
   `meaning` 0–300, `sentence` optional 0–500, all strings. Unknown keys dropped.
 - `id` string 1–128.
 - Missing key → 401. Note not found → 404. Note belongs to someone else → 403.
@@ -148,7 +148,7 @@ success.
 
 ## 7. Files
 
-- `web/lib/types.ts` — `Note`, `NoteCard`; `CrewResponse.notes`.
+- `web/lib/types.ts` — `CrewNote`, `NoteCard`; `CrewResponse.notes`.
 - `web/lib/store.ts` — `getNotes`, `addNote`, `editNote`, `deleteNote`.
 - `web/lib/notes.ts` (new) — pure helpers: validate body, count unseen, notes
   by card id, filter by person.
