@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import PersonPanel from "@/app/components/PersonPanel";
 import type { DayRow, PersonView } from "@/lib/types";
+import type { WeekResult } from "@/lib/competition";
 
 function day(date: string, over: Partial<DayRow> = {}): DayRow {
   return { date, reviews: 0, minutes: 0, newCards: 0, ease1: 0, ease2: 0,
@@ -58,5 +59,24 @@ describe("PersonPanel", () => {
     expect(screen.getByText("作り上げる")).toBeTruthy();
     expect(screen.getByText("to build up")).toBeTruthy();
     expect(screen.queryByText("5493")).toBeNull();
+  });
+
+  it("leads with the trophies, streak best and all-time new cards in a 3 × 2 grid", () => {
+    const results: WeekResult[] = [
+      { week: "2026-09-14", standings: [{ id: "jp", cards: 9 }, { id: "adam", cards: 1 }], winner: "jp", podium: null },
+    ];
+    render(<PersonPanel person={person} items={[]} results={results} />);
+    const tiles = screen.getByTestId("stat-grid").children;
+    expect(tiles).toHaveLength(6);
+    expect(within(tiles[0] as HTMLElement).getByText("🏆 1")).toBeTruthy();
+    expect(within(tiles[1] as HTMLElement).getByText("🔥 1")).toBeTruthy();
+    expect(within(tiles[2] as HTMLElement).getByText("best 2 days")).toBeTruthy();
+    expect(within(tiles[3] as HTMLElement).getByText("0 new cards")).toBeTruthy();
+  });
+
+  it("nudges before a first win", () => {
+    render(<PersonPanel person={person} items={[]} />);
+    expect(screen.getByText("first win up for grabs")).toBeTruthy();
+    expect(screen.getByText("win this week to start one")).toBeTruthy();
   });
 });

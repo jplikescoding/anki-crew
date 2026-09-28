@@ -1,7 +1,8 @@
 "use client";
-import { currentStreak, deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
+import { bestStreak, currentStreak, deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
 import { plainText, resolveCard } from "@/lib/fields";
 import type { FeedItem, FieldMaps, PersonView } from "@/lib/types";
+import { trophies, trophyCopy, type WeekResult } from "@/lib/competition";
 import { StatTile, StreakStar } from "@/app/components/primitives";
 
 function prettyDate(iso: string, withYear = false) {
@@ -10,8 +11,8 @@ function prettyDate(iso: string, withYear = false) {
   });
 }
 
-export default function PersonPanel({ person, items, fieldMaps }: {
-  person: PersonView; items: FeedItem[]; fieldMaps?: FieldMaps;
+export default function PersonPanel({ person, items, fieldMaps, results = [] }: {
+  person: PersonView; items: FeedItem[]; fieldMaps?: FieldMaps; results?: WeekResult[];
 }) {
   const byDate = new Map(person.days.map((d) => [d.date, d]));
   const window30 = Array.from({ length: 30 }, (_, i) => {
@@ -26,6 +27,20 @@ export default function PersonPanel({ person, items, fieldMaps }: {
   const mine = items.filter((i) => i.user === person.profile.id).slice(0, 20);
   const decks = deckTotals(person.days);
 
+  const copy = trophyCopy(trophies(person.profile.id, results));
+  const trophyTile = (label: string, c: typeof copy.weeks, delay: number, help: string) => (
+    <StatTile
+      label={label}
+      value={c.value}
+      sub={c.sub}
+      tint={c.earned ? "var(--gold)" : "var(--ink-faint)"}
+      glow={c.earned ? "rgba(251,191,36,.18)" : "rgba(255,255,255,.03)"}
+      edge={c.earned ? "rgba(251,191,36,.40)" : undefined}
+      delay={delay}
+      help={help}
+    />
+  );
+
   return (
     <section className="px-3 pt-3">
       <header className="flex items-baseline justify-between px-2 pb-3">
@@ -33,56 +48,50 @@ export default function PersonPanel({ person, items, fieldMaps }: {
         <span className="text-[10.5px]" style={{ color: "var(--ink-faint)" }}>{person.profile.tz}</span>
       </header>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      {/* Competition first: the gold row is what this page is for now. */}
+      <div data-testid="stat-grid" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {trophyTile("Weeks won", copy.weeks, 60, "Weeks finished with the most cards in the crew. Weeks run Monday to Sunday.")}
+        {trophyTile("Winning run", copy.run, 140, "Weeks won in a row. A loss or a tie ends it.")}
+        <StatTile
+          label="Streak"
+          sub={`best ${bestStreak(person.days)} days`}
+          tint="var(--gold)"
+          glow="rgba(251,191,36,.15)"
+          delay={220}
+          help="Consecutive days with at least one review. Miss a whole day and it starts again. The star changes at 3, 7, 14, 30 and 100 days."
+        >
+          <StreakStar streak={currentStreak(person.days, person.meta.todayKey)} />
+        </StatTile>
         <StatTile
           label="All time"
           numeric={person.meta.allTimeReviews}
+          sub={`${sums.newCards.toLocaleString()} new cards`}
           tint="var(--violet-soft)"
           glow="rgba(124,58,237,.20)"
-          delay={60}
-          help="Every review ever recorded in this collection. Cram sessions and manual reschedules are excluded."
+          delay={300}
+          help="Every review ever recorded in this collection. New cards are the ones seen for the very first time."
         >
           <span data-testid="all-time">{person.meta.allTimeReviews.toLocaleString()}</span>
         </StatTile>
-        <StatTile
-          label="New cards"
-          numeric={sums.newCards}
-          tint="var(--cyan-soft)"
-          glow="rgba(6,182,212,.16)"
-          delay={180}
-          help="Cards seen for the very first time — the ones that grow the deck rather than maintain it."
-        />
         <StatTile
           label="Recall"
           value={ret === null ? "—" : `${ret}%`}
           tint="var(--jade)"
           glow="rgba(52,211,153,.14)"
-          delay={300}
+          delay={380}
           help="Of the cards Anki showed, the share recalled. Again is a miss; Hard, Good and Easy are hits."
         />
         <StatTile
-          label="Streak"
-          tint="var(--gold)"
-          glow="rgba(251,191,36,.15)"
-          delay={420}
-          help="Consecutive days with at least one review. The star changes at 3, 7, 14, 30 and 100 days."
+          label="Best day"
+          sub={best ? prettyDate(best.date, true) : "no sessions yet"}
+          more={bestRow ? `${Math.round(bestRow.minutes)} min · ${bestRow.newCards} new` : undefined}
+          tint="var(--violet-soft)"
+          glow="rgba(124,58,237,.20)"
+          delay={460}
+          help="The most cards they have ever reviewed in a single day."
         >
-          <StreakStar streak={currentStreak(person.days, person.meta.todayKey)} />
+          <span data-testid="best-day">{best ? best.reviews.toLocaleString() : "—"}</span>
         </StatTile>
-        {/* Wide, so the date has room for its year on a phone. */}
-        <div className="col-span-2 grid">
-          <StatTile
-            label="Best day"
-            sub={best ? prettyDate(best.date, true) : "no sessions yet"}
-            more={bestRow ? `${Math.round(bestRow.minutes)} min · ${bestRow.newCards} new` : undefined}
-            tint="var(--violet-soft)"
-            glow="rgba(124,58,237,.20)"
-            delay={540}
-            help="The most cards they have ever reviewed in a single day."
-          >
-            <span data-testid="best-day">{best ? best.reviews.toLocaleString() : "—"}</span>
-          </StatTile>
-        </div>
       </div>
 
       <div className="pane mt-2.5 px-4 pb-3 pt-3">

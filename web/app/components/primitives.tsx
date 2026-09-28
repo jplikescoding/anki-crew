@@ -207,7 +207,7 @@ export function Track({ days, lit }: { days: TrackDay[]; lit: boolean }) {
  * is the card-kit look, and it reads as flat however good the numbers are.
  */
 export function StatTile({
-  label, value, numeric, sub, more, tint, glow, help, delay = 0, children,
+  label, value, numeric, sub, more, tint, glow, help, delay = 0, children, edge,
 }: {
   label: string;
   value?: string;
@@ -219,6 +219,8 @@ export function StatTile({
   help: string;
   delay?: number;
   children?: ReactNode;
+  /** Resting border colour; gold on an earned trophy. */
+  edge?: string;
 }) {
   const [over, setOver] = useState(false);
   const [sweepKey, setSweepKey] = useState(0);
@@ -236,7 +238,7 @@ export function StatTile({
       onMouseLeave={() => setOver(false)}
       className="relative overflow-hidden rounded-[14px] border px-4 py-3.5 transition-[border-color,box-shadow,transform] duration-300"
       style={{
-        borderColor: over ? tint : "var(--edge)",
+        borderColor: over ? tint : edge ?? "var(--edge)",
         background: `linear-gradient(158deg, ${glow}, rgba(255,255,255,.04) 62%)`,
         boxShadow: over ? `0 0 26px -12px ${tint}` : "none",
         transform: over ? "translateY(-2px)" : "none",
