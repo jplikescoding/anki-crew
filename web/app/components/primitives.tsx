@@ -12,15 +12,16 @@ import { streakTier } from "@/lib/metrics";
  * Drawn on the page body at fixed coordinates, not inside the trigger: feed
  * cards clip their overflow, and a tooltip inside one gets cut at its edge.
  */
-export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
+export function Tooltip({ label, children, width = 240 }: { label: ReactNode; children: ReactNode; width?: number }) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
 
   const show = () => {
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
-    // Centred over the trigger, kept 16px inside the screen (the bubble is 240px wide).
-    const x = Math.min(Math.max(r.left + r.width / 2, 136), window.innerWidth - 136);
+    // Centred over the trigger, kept 16px inside the screen.
+    const half = width / 2 + 16;
+    const x = Math.min(Math.max(r.left + r.width / 2, half), window.innerWidth - half);
     setAt({ x, y: r.top });
   };
   const hide = () => setAt(null);
@@ -45,11 +46,12 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
       {at && createPortal(
         <span
           role="tooltip"
-          className="pointer-events-none fixed z-50 w-60 -translate-x-1/2 -translate-y-full
+          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full
                      rounded-xl border px-3 py-2 text-left text-[11.5px] leading-relaxed font-normal
                      normal-case tracking-normal shadow-xl"
           style={{
             left: at.x,
+            width,
             top: at.y - 8,
             background: "#12172A",
             borderColor: "var(--edge)",

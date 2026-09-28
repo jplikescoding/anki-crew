@@ -93,12 +93,13 @@ describe("deck badge", () => {
 });
 
 describe("deck badge explanation", () => {
-  it("names the card's owner and explains all four on hover", () => {
+  it("shows a colour key on hover, naming the owner and marking this card's row", () => {
     render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": "new" }} />);
     fireEvent.mouseEnter(screen.getByTestId("deck-status-adam:1"));
     const tip = screen.getByRole("tooltip");
-    expect(tip).toHaveTextContent("Compares Adam's card with your decks");
+    expect(tip).toHaveTextContent("Adam's word, in your decks");
     for (const word of ["known", "learning", "unstudied", "not in your deck"]) expect(tip).toHaveTextContent(word);
+    expect(tip.querySelector('[data-current="true"]')).toHaveTextContent("unstudied");
   });
 
   it("sits outside the card, so the card's edge can't cut it off", () => {
@@ -149,5 +150,29 @@ describe("vs. my deck filter", () => {
   it("stays out of the way before your deck index exists", () => {
     render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{}} />);
     expect(screen.queryByTestId("filter-deck")).toBeNull();
+  });
+});
+
+describe("deck colour guide", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("shows the key above the feed once badges exist", () => {
+    render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": "new" }} />);
+    const guide = screen.getByTestId("deck-legend");
+    for (const word of ["known", "learning", "unstudied", "not in your deck"]) expect(guide).toHaveTextContent(word);
+  });
+
+  it("stays gone after Don't show this again", () => {
+    const { unmount } = render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": "new" }} />);
+    fireEvent.click(screen.getByTestId("deck-legend-dismiss"));
+    expect(screen.queryByTestId("deck-legend")).toBeNull();
+    unmount();
+    render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": "new" }} />);
+    expect(screen.queryByTestId("deck-legend")).toBeNull();
+  });
+
+  it("doesn't show before there are any badges", () => {
+    render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{}} />);
+    expect(screen.queryByTestId("deck-legend")).toBeNull();
   });
 });

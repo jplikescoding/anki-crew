@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import BackToTop, { scrollBehavior, scrollToTop } from "@/app/components/BackToTop";
+import DeckLegend from "@/app/components/DeckLegend";
 import FeedCard from "@/app/components/FeedCard";
 import FeedFilters from "@/app/components/FeedFilters";
 import {
@@ -237,6 +238,8 @@ export default function Feed({
         viewer={viewer}
         deckCounts={counts}
       />
+
+      {counts && <DeckLegend />}
 
       {caughtUp && (
         <p

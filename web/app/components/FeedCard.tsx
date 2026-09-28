@@ -2,6 +2,7 @@
 import { useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { Avatar } from "@/app/components/Avatar";
 import CardNotes from "@/app/components/CardNotes";
+import { DeckKey } from "@/app/components/DeckLegend";
 import { Tooltip } from "@/app/components/primitives";
 import { boldParts, plainText, type Resolved } from "@/lib/fields";
 import type { Comment, CrewNote, DeckStatus, Engagement, FeedItem, PersonView } from "@/lib/types";
@@ -22,10 +23,6 @@ export function ago(ts: number, now: number): string {
   return `${Math.round(ms / 86400000)}d`;
 }
 
-/** Only on hover: the badge itself stays short. */
-const deckHelp = (owner: string) =>
-  `Compares ${owner}'s card with your decks. known: you've learned this word. learning: you're partway through it. `
-  + "unstudied: it's in your deck but you haven't reached it yet. not in your deck: you don't have it.";
 const STATUS_LABEL: Record<DeckStatus | "none", string> = {
   known: "your deck · known", learning: "your deck · learning", new: "your deck · unstudied", none: "not in your deck",
 };
@@ -128,7 +125,7 @@ export default function FeedCard({
             {deckStatus && (
               <>
                 {' · '}
-                <Tooltip label={deckHelp(who?.profile.displayName ?? item.user)}>
+                <Tooltip width={330} label={<DeckKey owner={who?.profile.displayName ?? item.user} current={deckStatus} />}>
                   <span data-testid={`deck-status-${item.id}`} className="rounded-full px-1.5 py-[1px]"
                         style={STATUS_STYLE[deckStatus]}>
                     {STATUS_LABEL[deckStatus]}
