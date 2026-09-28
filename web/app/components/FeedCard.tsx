@@ -22,9 +22,12 @@ export function ago(ts: number, now: number): string {
   return `${Math.round(ms / 86400000)}d`;
 }
 
-const DECK_HELP = "Is this word in any of your decks, and how well you know it.";
+/** Only on hover: the badge itself stays short. */
+const deckHelp = (owner: string) =>
+  `Compares ${owner}'s card with your decks. known: you've learned this word. learning: you're partway through it. `
+  + "unstudied: it's in your deck but you haven't reached it yet. not in your deck: you don't have it.";
 const STATUS_LABEL: Record<DeckStatus | "none", string> = {
-  known: "known", learning: "learning", new: "not seen yet", none: "not in your deck",
+  known: "your deck · known", learning: "your deck · learning", new: "your deck · unstudied", none: "not in your deck",
 };
 const STATUS_STYLE: Record<DeckStatus | "none", CSSProperties> = {
   known: { color: "var(--jade)", background: "rgba(52,211,153,.12)" },
@@ -125,7 +128,7 @@ export default function FeedCard({
             {deckStatus && (
               <>
                 {' · '}
-                <Tooltip label={DECK_HELP}>
+                <Tooltip label={deckHelp(who?.profile.displayName ?? item.user)}>
                   <span data-testid={`deck-status-${item.id}`} className="rounded-full px-1.5 py-[1px]"
                         style={STATUS_STYLE[deckStatus]}>
                     {STATUS_LABEL[deckStatus]}

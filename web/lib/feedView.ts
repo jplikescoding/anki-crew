@@ -1,13 +1,17 @@
-import type { Engagement, FeedItem } from "@/lib/types";
+import type { DeckStatus, Engagement, FeedItem } from "@/lib/types";
 
 /** Shaping the feed: which cards, and under which day. Pure, so it's testable without a DOM. */
 
 export type Outcome = "all" | "missed" | "got";
-export type FeedFilter = { person: string | null; outcome: Outcome; comments: boolean; unread: boolean };
-export const NO_FILTER: FeedFilter = { person: null, outcome: "all", comments: false, unread: false };
+/** Where a friend's word sits in your decks; "none" is not in them at all. */
+export type DeckMatch = DeckStatus | "none";
+export type FeedFilter = {
+  person: string | null; outcome: Outcome; comments: boolean; unread: boolean; deck: DeckMatch | null;
+};
+export const NO_FILTER: FeedFilter = { person: null, outcome: "all", comments: false, unread: false, deck: null };
 
 export function isFiltered(f: FeedFilter): boolean {
-  return f.person !== null || f.outcome !== "all" || f.comments || f.unread;
+  return f.person !== null || f.outcome !== "all" || f.comments || f.unread || f.deck !== null;
 }
 
 /**
@@ -17,6 +21,7 @@ export function isFiltered(f: FeedFilter): boolean {
 export function applyFilter(
   items: FeedItem[], f: FeedFilter,
   engagement: Record<string, Engagement>, unreadIds: Set<string>,
+  inMyDeck: Record<string, DeckMatch> = {},
 ): FeedItem[] {
   return items.filter((i) => {
     if (f.person && i.user !== f.person) return false;
@@ -24,11 +29,34 @@ export function applyFilter(
     if (f.outcome === "got" && i.ease === 1) return false;
     if (f.comments && !(engagement[i.id]?.comments.length)) return false;
     if (f.unread && !unreadIds.has(i.id)) return false;
+    // Your own cards carry no badge, so any deck filter leaves them out.
+    if (f.deck && inMyDeck[i.id] !== f.deck) return false;
     return true;
   });
 }
 
+/** How many badged cards of each kind, for everyone or one person: the numbers in the dropdown. */
+export function deckCounts(
+  items: FeedItem[], inMyDeck: Record<string, DeckMatch>, person: string | null,
+): Record<DeckMatch, number> {
+  const out: Record<DeckMatch, number> = { known: 0, learning: 0, new: 0, none: 0 };
+  for (const i of items) {
+    const status = inMyDeck[i.id];
+    if (status && (!person || i.user === person)) out[status] += 1;
+  }
+  return out;
+}
+
+const DECK_PHRASE: Record<DeckMatch, string> = {
+  known: "you know", learning: "you're learning", new: "unstudied in your deck", none: "not in your deck",
+};
+
 export function emptyMessage(f: FeedFilter, personName: string | null): string {
+  if (f.deck) {
+    return personName
+      ? `No cards from ${personName} ${DECK_PHRASE[f.deck]} yet`
+      : `No friends' cards ${DECK_PHRASE[f.deck]} yet`;
+  }
   const outcome = f.outcome === "missed" ? "missed " : f.outcome === "got" ? "successful " : "";
   const extra = f.unread ? " with unread comments" : f.comments ? " with comments" : "";
   const who = personName ? ` from ${personName}` : "";

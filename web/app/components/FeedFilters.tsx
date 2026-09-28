@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import { Avatar } from "@/app/components/Avatar";
-import type { FeedFilter, Outcome } from "@/lib/feedView";
+import type { DeckMatch, FeedFilter, Outcome } from "@/lib/feedView";
 import type { PersonView } from "@/lib/types";
 
 // Rose and jade already mean "missed" and "got it" everywhere else in the app.
@@ -9,6 +9,10 @@ const OUTCOMES: [Outcome, string, string][] = [
   ["all", "All", "var(--ink)"],
   ["missed", "Missed", "var(--rose)"],
   ["got", "Got it", "var(--jade)"],
+];
+
+const DECK_OPTIONS: [DeckMatch, string][] = [
+  ["known", "Known"], ["learning", "Learning"], ["new", "Unstudied"], ["none", "Not in my deck"],
 ];
 
 // Inline styles set the resting look, so hover has to outrank them.
@@ -38,7 +42,9 @@ function Toggle({ testid, on, onClick, children }: {
  * Pinned under the header so the feed can be re-sliced from anywhere in it,
  * not just from the top.
  */
-export default function FeedFilters({ people, indexOf, filter, onChange, unreadCount, sentences, onSentences }: {
+export default function FeedFilters({
+  people, indexOf, filter, onChange, unreadCount, sentences, onSentences, viewer, deckCounts,
+}: {
   people: PersonView[];
   indexOf: Map<string, number>;
   filter: FeedFilter;
@@ -48,6 +54,9 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
   /** Sample sentences under every card. */
   sentences: boolean;
   onSentences: () => void;
+  viewer?: string | null;
+  /** Badged cards per status in the current person scope. Null before your deck index exists. */
+  deckCounts?: Record<DeckMatch, number> | null;
 }) {
   const set = (patch: Partial<FeedFilter>) => onChange({ ...filter, ...patch });
 
@@ -65,7 +74,8 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
               key={p.profile.id}
               data-testid={`chip-${p.profile.id}`}
               aria-pressed={on}
-              onClick={() => set({ person: on ? null : p.profile.id })}
+              // Your own cards have no deck badge, so a deck filter would empty the list.
+              onClick={() => set({ person: on ? null : p.profile.id, ...(p.profile.id === viewer ? { deck: null } : {}) })}
               className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11.5px] transition duration-150 active:scale-[.96]${on ? "" : OFF_HOVER}`}
               style={{
                 borderColor: on ? "var(--edge-lit)" : "var(--edge)",
@@ -122,6 +132,32 @@ export default function FeedFilters({ people, indexOf, filter, onChange, unreadC
         <Toggle testid="filter-sentences" on={sentences} onClick={onSentences}>
           <span className="jp">例</span>&nbsp;Sentences
         </Toggle>
+
+        {/* Your own cards have no badge to compare, so there's nothing to offer on them. */}
+        {deckCounts && filter.person !== viewer && (
+          <select
+            data-testid="filter-deck"
+            aria-label="Compare with my deck"
+            title="Show friends' cards by where that word is in your decks."
+            value={filter.deck ?? ""}
+            onChange={(e) => set({ deck: (e.target.value || null) as DeckMatch | null })}
+            className="min-h-8 shrink-0 rounded-full border px-2.5 text-[11.5px]"
+            style={{
+              borderColor: filter.deck ? "var(--edge-lit)" : "var(--edge)",
+              background: filter.deck ? "var(--pane-lift)" : "transparent",
+              color: filter.deck ? "var(--ink)" : "var(--ink-dim)",
+            }}
+          >
+            <option value="">
+              {filter.person
+                ? `${people.find((p) => p.profile.id === filter.person)?.profile.displayName ?? filter.person}'s cards vs. my deck`
+                : "Friends' cards vs. my deck"}
+            </option>
+            {DECK_OPTIONS.filter(([value]) => deckCounts[value] > 0 || filter.deck === value).map(([value, label]) => (
+              <option key={value} value={value}>{label} ({deckCounts[value]})</option>
+            ))}
+          </select>
+        )}
       </div>
     </div>
   );

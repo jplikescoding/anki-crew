@@ -4,7 +4,7 @@ import BackToTop, { scrollBehavior, scrollToTop } from "@/app/components/BackToT
 import FeedCard from "@/app/components/FeedCard";
 import FeedFilters from "@/app/components/FeedFilters";
 import {
-  applyFilter, emptyMessage, groupByDay, isFiltered, NO_FILTER, type FeedFilter,
+  applyFilter, deckCounts, emptyMessage, groupByDay, isFiltered, NO_FILTER, type FeedFilter,
 } from "@/lib/feedView";
 import { isUnread, newestIn, readUpTo, unreadThreads, type SeenMap } from "@/lib/unread";
 import { resolveCard } from "@/lib/fields";
@@ -106,8 +106,12 @@ export default function Feed({
 
   const unreadIds = useMemo(() => new Set([...pinned, ...unread]), [pinned, unread]);
   const shown = useMemo(
-    () => applyFilter(items, filter, engagement, unreadIds),
-    [items, filter, engagement, unreadIds]);
+    () => applyFilter(items, filter, engagement, unreadIds, inMyDeck),
+    [items, filter, engagement, unreadIds, inMyDeck]);
+  // No badges at all means no deck index yet: nothing to filter by.
+  const counts = useMemo(
+    () => (inMyDeck && Object.keys(inMyDeck).length > 0 ? deckCounts(items, inMyDeck, filter.person) : null),
+    [items, inMyDeck, filter.person]);
   const groups = groupByDay(shown.slice(0, limit), shown, tz, now);
   const caughtUp = filter.unread && unread.length === 0;
   const personName = filter.person
@@ -230,6 +234,8 @@ export default function Feed({
         unreadCount={unread.length}
         sentences={sentences}
         onSentences={toggleSentences}
+        viewer={viewer}
+        deckCounts={counts}
       />
 
       {caughtUp && (

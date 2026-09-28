@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyFilter, dayKey, dayLabel, emptyMessage, groupByDay, isFiltered, NO_FILTER,
+  applyFilter, dayKey, dayLabel, deckCounts, emptyMessage, groupByDay, isFiltered, NO_FILTER,
 } from "@/lib/feedView";
 import type { FeedItem } from "@/lib/types";
 
@@ -99,5 +99,37 @@ describe("groupByDay", () => {
   it("starts a new group when the day changes", () => {
     const groups = groupByDay(all, all, NY, NOW);
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([["Today", 2], ["Yesterday", 1]]);
+  });
+});
+
+describe("the vs-my-deck filter", () => {
+  const deck = { "adam:1": "new", "adam:2": "known", "peter:1": "new" } as const;
+  const more = [...items, item("peter:1", "peter", 3), item("peter:2", "peter", 3)];
+
+  it("keeps friends' cards whose word has that status in your deck", () => {
+    const got = applyFilter(more, { ...NO_FILTER, deck: "new" }, {}, new Set(), deck).map((i) => i.id);
+    expect(got).toEqual(["adam:1", "peter:1"]);
+  });
+
+  it("drops cards with no badge, including your own", () => {
+    const got = applyFilter(more, { ...NO_FILTER, deck: "known" }, {}, new Set(), deck).map((i) => i.id);
+    expect(got).toEqual(["adam:2"]);
+  });
+
+  it("combines with the person filter", () => {
+    const got = applyFilter(more, { ...NO_FILTER, deck: "new", person: "peter" }, {}, new Set(), deck).map((i) => i.id);
+    expect(got).toEqual(["peter:1"]);
+  });
+
+  it("counts as a filter and says what it is when empty", () => {
+    expect(isFiltered({ ...NO_FILTER, deck: "none" })).toBe(true);
+    expect(emptyMessage({ ...NO_FILTER, deck: "new" }, null)).toBe("No friends' cards unstudied in your deck yet");
+    expect(emptyMessage({ ...NO_FILTER, deck: "none", person: "adam" }, "Adam"))
+      .toBe("No cards from Adam not in your deck yet");
+  });
+
+  it("counts each status, for everyone or one person", () => {
+    expect(deckCounts(more, deck, null)).toEqual({ known: 1, learning: 0, new: 2, none: 0 });
+    expect(deckCounts(more, deck, "adam")).toEqual({ known: 1, learning: 0, new: 1, none: 0 });
   });
 });

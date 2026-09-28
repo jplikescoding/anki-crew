@@ -79,7 +79,8 @@ describe("sentences", () => {
 
 describe("deck badge", () => {
   it.each([
-    ["known", "known"], ["learning", "learning"], ["new", "not seen yet"], ["none", "not in your deck"],
+    ["known", "your deck · known"], ["learning", "your deck · learning"],
+    ["new", "your deck · unstudied"], ["none", "not in your deck"],
   ] as const)("reads %s as '%s'", (status, label) => {
     render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": status }} />);
     expect(screen.getByTestId("deck-status-adam:1")).toHaveTextContent(label);
@@ -88,5 +89,51 @@ describe("deck badge", () => {
   it("is absent when the server sent nothing for the card", () => {
     render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{}} />);
     expect(screen.queryByTestId("deck-status-adam:1")).toBeNull();
+  });
+});
+
+describe("deck badge explanation", () => {
+  it("names the card's owner and explains all four on hover", () => {
+    render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{ "adam:1": "new" }} />);
+    fireEvent.mouseEnter(screen.getByTestId("deck-status-adam:1"));
+    const tip = screen.getByRole("tooltip");
+    expect(tip).toHaveTextContent("Compares Adam's card with your decks");
+    for (const word of ["known", "learning", "unstudied", "not in your deck"]) expect(tip).toHaveTextContent(word);
+  });
+});
+
+describe("vs. my deck filter", () => {
+  const second: FeedItem = { ...adams, id: "adam:2" };
+  const mine: FeedItem = { ...adams, id: "jp:1", user: "jp" };
+  const deck = { "adam:1": "new", "adam:2": "none" } as const;
+
+  it("lists only statuses that have cards, with counts, and filters to them", () => {
+    render(<Feed items={[adams, second, mine]} people={people} viewer="jp" inMyDeck={deck} />);
+    const select = screen.getByTestId("filter-deck");
+    expect([...select.querySelectorAll("option")].map((o) => o.textContent))
+      .toEqual(["Friends' cards vs. my deck", "Unstudied (1)", "Not in my deck (1)"]);
+    fireEvent.change(select, { target: { value: "none" } });
+    expect(screen.queryByTestId("deck-status-adam:1")).toBeNull();
+    expect(screen.getByTestId("deck-status-adam:2")).toBeInTheDocument();
+  });
+
+  it("names the person when one is picked, and hides on your own cards", () => {
+    render(<Feed items={[adams, mine]} people={people} viewer="jp" inMyDeck={deck} />);
+    fireEvent.click(screen.getByTestId("chip-adam"));
+    expect(screen.getByTestId("filter-deck").querySelector("option")?.textContent).toBe("Adam's cards vs. my deck");
+    fireEvent.click(screen.getByTestId("chip-jp"));
+    expect(screen.queryByTestId("filter-deck")).toBeNull();
+  });
+
+  it("lets go of the deck filter when you switch to your own cards", () => {
+    render(<Feed items={[adams, mine]} people={people} viewer="jp" inMyDeck={deck} />);
+    fireEvent.change(screen.getByTestId("filter-deck"), { target: { value: "new" } });
+    fireEvent.click(screen.getByTestId("chip-jp"));
+    expect(screen.queryByTestId("feed-empty")).toBeNull();
+  });
+
+  it("stays out of the way before your deck index exists", () => {
+    render(<Feed items={[adams]} people={people} viewer="jp" inMyDeck={{}} />);
+    expect(screen.queryByTestId("filter-deck")).toBeNull();
   });
 });
