@@ -71,8 +71,9 @@ export function competesIn(p: PersonView, week: string): boolean {
   return week >= SEASON_START && week >= firstWeek(p);
 }
 
+/** A week someone did no cards in is no win or loss for them: they're left out of it. */
 export function weekResult(week: string, people: PersonView[]): WeekResult | null {
-  const racing = people.filter((p) => competesIn(p, week));
+  const racing = people.filter((p) => competesIn(p, week) && weekCards(p, week) > 0);
   if (racing.length < 2) return null;
   const standings = rankBy(racing, (p) => weekCards(p, week))
     .map((p) => ({ id: p.profile.id, cards: weekCards(p, week) }));

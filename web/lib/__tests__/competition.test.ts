@@ -68,9 +68,13 @@ describe("weekResult", () => {
     expect(r?.winner).toBeNull();
   });
 
-  it("keeps a competitor who did nothing, at 0", () => {
-    const r = weekResult(W39, [person("jp", []), person("adam", [day("2026-09-23", 5)])]);
-    expect(r?.standings).toEqual([{ id: "adam", cards: 5 }, { id: "jp", cards: 0 }]);
+  it("leaves out a competitor who did nothing, so the week is no win or loss for them", () => {
+    const r = weekResult(W39, [person("jp", []), person("adam", [day("2026-09-23", 5)]), person("harry", [day("2026-09-24", 3)])]);
+    expect(r?.standings).toEqual([{ id: "adam", cards: 5 }, { id: "harry", cards: 3 }]);
+  });
+
+  it("has no result when only one person studied", () => {
+    expect(weekResult(W39, [person("jp", []), person("adam", [day("2026-09-23", 5)])])).toBeNull();
   });
 
   it("has no result with fewer than two competitors", () => {
@@ -85,8 +89,8 @@ describe("weekResult", () => {
   });
 
   it("only counts days inside the week", () => {
-    const r = weekResult(W39, [person("jp", [day("2026-09-20", 500), day("2026-09-28", 500), day("2026-09-27", 1)]), person("adam", [])]);
-    expect(r?.standings[0]).toEqual({ id: "jp", cards: 1 });
+    const r = weekResult(W39, [person("jp", [day("2026-09-20", 500), day("2026-09-28", 500), day("2026-09-27", 2)]), person("adam", [day("2026-09-23", 1)])]);
+    expect(r?.standings[0]).toEqual({ id: "jp", cards: 2 });
   });
 });
 
