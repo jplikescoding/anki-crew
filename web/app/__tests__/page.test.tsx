@@ -564,7 +564,10 @@ describe("the weekly race", () => {
       fakeTimers();
       fireEvent.click(pill);
       expect(competitionPosts().some((b) => b.ranks?.adam?.rank === "gold" && b.ranks.adam.streak === 14)).toBe(true);
-      advance(3400);
+      advance(1000); // before the swap
+      expect(row("adam").getAllByTestId("frame-silver").length).toBeGreaterThan(0);
+      expect(row("adam").getAllByText("13").length).toBeGreaterThan(0);
+      advance(2400);
       expect(row("adam").getByTestId("frame-gold")).toBeTruthy();
       expect(row("adam").getAllByText("14").length).toBeGreaterThan(0);
       expect(playChing).toHaveBeenCalled();
@@ -584,6 +587,45 @@ describe("the weekly race", () => {
       advance(2000); // and ends
       expect(row("jp").queryByTestId(/^frame-/)).toBeNull();
       expect(row("jp").queryAllByText("5")).toHaveLength(0);
+    });
+
+    describe("a refresh while they play", () => {
+      const comeBack = async () => {
+        await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+        await act(async () => { await Promise.resolve(); });
+      };
+
+      it("keeps a queued row held once the ack has landed", async () => {
+        crewReplies.push(ranked(BOTH));
+        await mount();
+        const pill = await screen.findByTestId("moment-pill");
+        fakeTimers();
+        fireEvent.click(pill);
+        advance(1800); // past Adam's swap, JP's crumble still queued
+        crewReplies.push(ranked({ adam: { rank: "gold", streak: 14 }, jp: { rank: null, streak: 1 } }));
+        await comeBack();
+        expect(crewCalls()).toBe(2);
+        expect(row("jp").getByTestId("frame-bronze")).toBeTruthy();
+        expect(row("adam").getByTestId("frame-gold")).toBeTruthy();
+        advance(1600); // Adam's moment ends; JP's crumble starts
+        advance(2000); // and ends
+        expect(row("jp").queryByTestId(/^frame-/)).toBeNull();
+      });
+
+      it("doesn't bring the pill back if the ack hasn't landed", async () => {
+        crewReplies.push(ranked(BOTH));
+        await mount();
+        const pill = await screen.findByTestId("moment-pill");
+        fakeTimers();
+        fireEvent.click(pill);
+        advance(1800);
+        crewReplies.push(ranked(BOTH));
+        await comeBack();
+        expect(crewCalls()).toBe(2);
+        expect(screen.queryByTestId("moment-pill")).toBeNull();
+        expect(row("adam").getByTestId("frame-gold")).toBeTruthy();
+        expect(row("jp").getByTestId("frame-bronze")).toBeTruthy();
+      });
     });
 
     it("shows the sound hint once", async () => {

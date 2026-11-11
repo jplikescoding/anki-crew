@@ -70,6 +70,10 @@ export default function Page() {
   const [compState, setCompState] = useState<CompetitionState>({ results: {} });
   const [moments, setMoments] = useState<Moment[]>([]);
   const queue = useRef<Moment[]>([]);
+  // From the pill's tap until the queue runs dry, plus whose rank is playing:
+  // a refresh then must neither re-show the pill nor un-hold a row.
+  const playing = useRef(false);
+  const rankPlaying = useRef<string | null>(null);
   const [roundup, setRoundup] = useState<{ result: WeekResult; late: boolean } | null>(null);
   const [celebrate, setCelebrate] = useState<{ id: string; tone: "gold" | "rose" } | null>(null);
   const [cardFor, setCardFor] = useState<string | null>(null);
@@ -111,8 +115,21 @@ export default function Page() {
       setResults(finished);
       setCompState(state);
       const pending = pendingMoments(next.people, next.viewer, state, finished);
-      setMoments(pending);
-      setHeld(heldStreaks(state, pending));
+      if (playing.current) {
+        const ids = new Set(queue.current.filter(isRankMoment).map((m) => m.id));
+        if (rankPlaying.current) ids.add(rankPlaying.current);
+        setHeld((prev) => {
+          const out = heldStreaks(state, pending);
+          for (const id of ids) {
+            if (id in prev) out[id] = prev[id];
+            else delete out[id];
+          }
+          return out;
+        });
+      } else {
+        setMoments(pending);
+        setHeld(heldStreaks(state, pending));
+      }
       if (me) {
         // Best effort: a lost save only means a moment may show once more.
         void fetch(`/api/competition?key=${encodeURIComponent(key)}`, {
@@ -289,7 +306,8 @@ export default function Page() {
   const playNext = useCallback(function next() {
     const m = queue.current.shift();
     const me = data?.viewer;
-    if (!m || !me) { setCelebrate(null); return; }
+    rankPlaying.current = null;
+    if (!m || !me) { playing.current = false; setCelebrate(null); return; }
     if (m.kind === "results" || m.kind === "late") {
       setRoundup({ result: m.result, late: m.kind === "late" });
       if (m.result.winner === me) playCelebration();
@@ -297,6 +315,7 @@ export default function Page() {
     }
     if (m.kind === "rankUp" || m.kind === "crumble") {
       setTab("board");
+      rankPlaying.current = m.id;
       setRankPlay({ id: m.id, kind: m.kind, from: m.from, to: m.to });
       return;
     }
@@ -316,6 +335,7 @@ export default function Page() {
       try { localStorage.setItem(SOUND_HINT_KEY, "1"); } catch { /* storage blocked */ }
     }
     queue.current = [...moments];
+    playing.current = true;
     setMoments([]);
     const patch = ackPatch(data.people, data.viewer, results);
     setCompState((s) => ({ ...s, results: { ...s.results, ...patch.results } }));
