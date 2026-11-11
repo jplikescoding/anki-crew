@@ -2,11 +2,14 @@
 // moment play once. Pure: the page decides when to show and when to save.
 import { competesIn, crewWeek, type WeekResult } from "@/lib/competition";
 import { rankBy, scoreNow, weekStart } from "@/lib/metrics";
-import type { CompetitionState, PersonView, Standing } from "@/lib/types";
+import { RANK_NAME, rankOrder, shownRank } from "@/lib/ranks";
+import type { CompetitionState, PersonView, Rank, Standing } from "@/lib/types";
 
 export type Moment =
   | { kind: "results"; result: WeekResult }
   | { kind: "late"; result: WeekResult }
+  | { kind: "rankUp"; id: string; from: Rank | null; to: Rank }
+  | { kind: "crumble"; id: string; from: Rank; to: Rank | null }
   | { kind: "passed"; ids: string[] }
   | { kind: "passedBy"; ids: string[] };
 
@@ -22,7 +25,7 @@ export function standingNow(people: PersonView[], viewerDay: string): Standing {
 
 /**
  * In the order they play: the latest roundup, then late corrections, then
- * passes on this week. Passes are net against the standing you last
+ * rank-ups and crumbles (against the rank you last saw), then passes on this week. Passes are net against the standing you last
  * acknowledged, so passing and being re-passed before you looked is nothing.
  * None on a Monday: everyone restarts at 0, and Monday is the roundup's.
  */
@@ -38,6 +41,15 @@ export function pendingMoments(
   for (const r of results) {
     const shown = state.results[r.week];
     if (shown !== undefined && shown !== shownAs(r)) out.push({ kind: "late", result: r });
+  }
+
+  for (const p of people) {
+    const was = state.ranks?.[p.profile.id];
+    if (!was) continue;
+    const now = shownRank(p).rank;
+    if (now === was.rank) continue;
+    if (rankOrder(now) > rankOrder(was.rank)) out.push({ kind: "rankUp", id: p.profile.id, from: was.rank, to: now as Rank });
+    else out.push({ kind: "crumble", id: p.profile.id, from: was.rank as Rank, to: now });
   }
 
   const today = me.meta.todayKey;
@@ -62,6 +74,7 @@ export function ackPatch(people: PersonView[], viewer: string | null, results: W
   const me = people.find((p) => p.profile.id === viewer);
   return {
     results: Object.fromEntries(results.map((r) => [r.week, shownAs(r)])),
+    ranks: Object.fromEntries(people.map((p) => [p.profile.id, shownRank(p)])),
     ...(me ? { standing: standingNow(people, me.meta.todayKey) } : {}),
   };
 }
@@ -81,7 +94,22 @@ export function silentPatch(
   if (missed.length > 0) patch.results = Object.fromEntries(missed.map((r) => [r.week, shownAs(r)]));
   const now = standingNow(people, me.meta.todayKey);
   if (!state.standing || state.standing.week !== now.week || isMonday(me.meta.todayKey)) patch.standing = now;
+  const unseen = people.filter((p) => !state.ranks?.[p.profile.id]);
+  if (unseen.length > 0) patch.ranks = Object.fromEntries(unseen.map((p) => [p.profile.id, shownRank(p)]));
   return Object.keys(patch).length > 0 ? patch : null;
+}
+
+export const isRankMoment = (m: Moment) => m.kind === "rankUp" || m.kind === "crumble";
+
+/** The streak each pending rank moment should keep showing until it plays. */
+export function heldStreaks(state: CompetitionState, moments: Moment[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of moments) {
+    if (m.kind !== "rankUp" && m.kind !== "crumble") continue;
+    const was = state.ranks?.[m.id];
+    if (was) out[m.id] = was.streak;
+  }
+  return out;
 }
 
 /** The line on the pill: what happened, not "something happened". */
@@ -96,6 +124,10 @@ export function momentHeadline(m: Moment, people: PersonView[], viewer: string |
       return m.result.winner
         ? `Late sync: ${name(m.result.winner)} took week ${crewWeek(m.result.week)} after all`
         : `Late sync: week ${crewWeek(m.result.week)} ended level after all`;
+    case "rankUp":
+      return `🛡 ${m.id === viewer ? "You" : name(m.id)} reached ${RANK_NAME[m.to]}`;
+    case "crumble":
+      return `${m.id === viewer ? "Your" : `${name(m.id)}'s`} ${RANK_NAME[m.from]} streak crumbled`;
     case "passed":
       return `⚡ You passed ${list(m.ids)} this week`;
     case "passedBy": {
