@@ -73,7 +73,7 @@ When a streak breaks, the streak goes to 0 and the rank drops all the way to non
 
 **A one-time sound hint** (JP's call): the first time a rank moment is waiting, the pill carries a small extra line, "🔊 These have sound, turn it up". Playing the moment dismisses it for good, stored per browser in `localStorage` like the existing show-once hints (`HINT_KEY` in `page.tsx`, `DeckLegend`). There's no separate button and no pop-up. It covers the case a tap can't fix: a phone on silent or with the volume down.
 
-**Only a confirmed break crumbles** (my call). The publisher only sends when Anki closes, so a day with no reviews might just not have synced yet. A missed day counts as a break only once that person has synced after the day ended in their own time zone (their `lastPublishAt` is past it). Until then the streak, crest and frame stay as they were, so a late sync never causes a false crumble followed by a "reached Gold" for a rank they never lost.
+**Only a confirmed break crumbles** (my call). The publisher only sends when Anki closes, so a day with no reviews might just not have synced yet. A missed day counts as a break only once that person has synced after the day ended in their own time zone (their `lastPublishAt` is past it), or once a second day has also gone by. The second-day rule is there so the streak of someone who stops opening Anki doesn't stay frozen forever. So a sync up to a day late is forgiven. Until then the streak, crest and frame stay as they were, so a late sync never causes a false crumble followed by a "reached Gold" for a rank they never lost.
 
 ### 5. Bookkeeping
 
