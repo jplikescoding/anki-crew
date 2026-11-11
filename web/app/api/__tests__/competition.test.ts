@@ -48,4 +48,19 @@ describe("POST /api/competition", () => {
     expect((await POST(req({ results: { "2026-09-21": 7 } }))).status).toBe(400);
     expect(saved).toEqual([]);
   });
+
+  it("saves ranks for the key holder", async () => {
+    const body = { ranks: { adam: { rank: "gold", streak: 14 } } };
+    const res = await POST(req(body));
+    expect(res.status).toBe(200);
+    expect(saved).toEqual([["jp", body]]);
+  });
+
+  it("rejects a rank it doesn't know, a negative streak, or too many people", async () => {
+    expect((await POST(req({ ranks: { adam: { rank: "mithril", streak: 14 } } }))).status).toBe(400);
+    expect((await POST(req({ ranks: { adam: { rank: "gold", streak: -1 } } }))).status).toBe(400);
+    const many = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`p${i}`, { rank: null, streak: 0 }]));
+    expect((await POST(req({ ranks: many }))).status).toBe(400);
+    expect(saved).toEqual([]);
+  });
 });

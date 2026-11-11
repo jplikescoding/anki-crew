@@ -136,4 +136,6 @@ export type CompetitionState = {
   standing?: Standing;
   /** A week's Monday -> the winner id you were shown, or "none" for a tie. */
   results: Record<string, string>;
+  /** Person id -> the rank and streak this viewer last saw for them. */
+  ranks?: Record<string, ShownRank>;
 };

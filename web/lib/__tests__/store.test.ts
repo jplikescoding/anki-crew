@@ -421,4 +421,13 @@ describe("competition state", () => {
       results: { "2026-09-21": "adam", "2026-09-28": "none" },
     });
   });
+
+  it("keeps the ranks a viewer has seen, one person at a time", async () => {
+    await saveCompetition("rk", { ranks: { adam: { rank: "gold", streak: 14 } } });
+    await saveCompetition("rk", { ranks: { jp: { rank: null, streak: 1 } } });
+    expect((await getCompetition("rk")).ranks).toEqual({
+      adam: { rank: "gold", streak: 14 },
+      jp: { rank: null, streak: 1 },
+    });
+  });
 });

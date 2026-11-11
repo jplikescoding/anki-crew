@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import type { Comment, CompetitionState, CrewNote, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Look, Meta, PersonView, Profile, Standing } from "@/lib/types";
+import type { Comment, CompetitionState, CrewNote, DayRow, DeckStatus, Engagement, FeedItem, FieldMap, FieldMaps, IngestBody, Look, Meta, PersonView, Profile, ShownRank, Standing } from "@/lib/types";
 import { FLOOR, type SeenMap } from "@/lib/unread";
 
 const redis = new Redis({
@@ -311,6 +311,7 @@ export async function deleteNote(id: string): Promise<void> {
 /* ------------------------------------------------------------ competition */
 
 const RESULT = "r:";
+const RANK = "k:";
 
 /**
  * What this viewer has seen of the weekly race: their last look, the standing
@@ -324,6 +325,7 @@ export async function getCompetition(userId: string): Promise<CompetitionState> 
     if (k === "look") out.look = parse<Look>(v);
     else if (k === "standing") out.standing = parse<Standing>(v);
     else if (k.startsWith(RESULT)) out.results[k.slice(RESULT.length)] = String(v);
+    else if (k.startsWith(RANK)) (out.ranks ??= {})[k.slice(RANK.length)] = parse<ShownRank>(v);
   }
   return out;
 }
@@ -333,5 +335,6 @@ export async function saveCompetition(userId: string, patch: Partial<Competition
   if (patch.look) fields.look = JSON.stringify(patch.look);
   if (patch.standing) fields.standing = JSON.stringify(patch.standing);
   for (const [week, winner] of Object.entries(patch.results ?? {})) fields[RESULT + week] = winner;
+  for (const [id, shown] of Object.entries(patch.ranks ?? {})) fields[RANK + id] = JSON.stringify(shown);
   if (Object.keys(fields).length > 0) await redis.hset(competitionKey(userId), fields);
 }

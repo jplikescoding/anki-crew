@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { userForRequest } from "@/lib/identity";
+import { RANKS } from "@/lib/ranks";
 import { saveCompetition } from "@/lib/store";
-import type { CompetitionState, Look, LookScores, Standing } from "@/lib/types";
+import type { CompetitionState, Look, LookScores, ShownRank, Standing } from "@/lib/types";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_PEOPLE = 20;
@@ -40,6 +41,19 @@ function asResults(v: unknown): Record<string, string> | null {
   return Object.fromEntries(entries) as Record<string, string>;
 }
 
+function asRanks(v: unknown): Record<string, ShownRank> | null {
+  if (!isObject(v)) return null;
+  const entries = Object.entries(v);
+  if (entries.length > MAX_PEOPLE) return null;
+  const out: Record<string, ShownRank> = {};
+  for (const [id, s] of entries) {
+    if (!isId(id) || !isObject(s) || !isCount(s.streak) || !Number.isInteger(s.streak)) return null;
+    if (s.rank !== null && !RANKS.includes(s.rank as never)) return null;
+    out[id] = { rank: s.rank as ShownRank["rank"], streak: s.streak };
+  }
+  return out;
+}
+
 /** Saves what the key holder has seen: their last look, acknowledged standing, and results shown. */
 export async function POST(req: Request) {
   const user = userForRequest(req);
@@ -68,6 +82,11 @@ export async function POST(req: Request) {
     const results = asResults(body.results);
     if (!results) return bad();
     patch.results = results;
+  }
+  if (body.ranks !== undefined) {
+    const ranks = asRanks(body.ranks);
+    if (!ranks) return bad();
+    patch.ranks = ranks;
   }
   if (Object.keys(patch).length === 0) return bad();
 
