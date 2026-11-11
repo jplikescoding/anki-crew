@@ -1,0 +1,299 @@
+<title>Anki Crew Rank Crests</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Cinzel:wght@700;900&display=swap">
+<style>
+:root{ color-scheme:dark; --ground:#070912; --ink:#F3F5FA; --ink-dim:#A5AEC4; --ink-faint:#6B7490; --edge:rgba(255,255,255,.09); }
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;color:var(--ink);font-family:Sora,system-ui,sans-serif;
+  background:radial-gradient(1200px 380px at 4% -12%,rgba(124,58,237,.30),transparent 60%),
+             radial-gradient(900px 340px at 100% 2%,rgba(6,182,212,.20),transparent 58%),var(--ground);
+  background-attachment:fixed;padding-block:28px 90px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-x:hidden}
+@media (max-width:520px){.row{gap:10px;padding:12px 12px}.pad-left{padding-left:54px}.meta{display:none}.nums{gap:10px}.cards{font-size:18px}.slot .n{font-size:10px;letter-spacing:.1em}.lineup{grid-template-columns:repeat(3,1fr);gap:18px 6px}.slot svg{max-width:96px}.av{display:none}.name{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{font:600 12px Sora,sans-serif;color:var(--ink);border:1px solid var(--edge);border-radius:999px;padding:6px 12px 6px 8px;background:rgba(255,255,255,.04);cursor:pointer;display:flex;align-items:center;gap:7px}
+.chip[aria-pressed="true"]{border-color:#ffe08a}
+.chip i{width:14px;height:18px;border-radius:2px;border:1px solid #b07a12}
+@media (prefers-reduced-motion:reduce){.hang animate{display:none}}
+.wrap{max-width:860px;margin:0 auto}
+h2{font-size:22px;margin:0 0 4px}
+h3{font-size:15px;margin:44px 0 4px;letter-spacing:.02em}
+.sub{color:var(--ink-dim);font-size:13px;margin:0 0 18px;line-height:1.5}
+.tiny{color:var(--ink-faint);font-size:11px}
+
+/* lineup */
+.lineup{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end}
+.slot{text-align:center}
+.slot svg{width:100%;max-width:140px;height:auto;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6))}
+.slot .n{font-family:Cinzel,Georgia,serif;font-weight:900;font-size:13px;letter-spacing:.18em;margin-top:6px}
+.slot .d{font-size:10.5px;color:var(--ink-faint)}
+
+/* row */
+.row{position:relative;display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:14px;
+  padding:14px 20px;border-radius:12px;margin:18px 0 6px;background:rgba(14,17,32,.92)}
+.rank{font-weight:800;color:var(--ink-faint);text-align:center}
+.who{display:flex;align-items:center;gap:10px;min-width:0}
+.av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#22D3EE);display:grid;place-items:center;font-weight:700;font-size:13px}
+.name{font-weight:600;font-size:15px}
+.meta{font-size:10.5px;color:var(--ink-faint);margin-top:2px}
+.nums{display:flex;align-items:center;gap:20px}
+.cards{font-size:22px;font-weight:800;letter-spacing:-.03em;text-align:right}
+.cards small{display:block;font-size:9.5px;font-weight:400;color:var(--ink-faint);letter-spacing:0}
+.streak{display:flex;align-items:center;gap:8px}
+.streak b{font-size:15px}
+.tierlabel{font-family:Cinzel,Georgia,serif;font-weight:900;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase}
+.emblem-slot{width:42px;height:42px;display:grid;place-items:center}
+.emblem-slot svg{width:42px;height:42px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+
+.frame{position:absolute;inset:0;border-radius:12px;pointer-events:none;padding:2px;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;transition:opacity .3s}
+.inner{position:absolute;inset:5px;border-radius:8px;pointer-events:none;border:1px solid}
+.corner{position:absolute;width:30px;height:30px;pointer-events:none}
+.corner.tl{left:-5px;top:-5px}.corner.tr{right:-5px;top:-5px;transform:scaleX(-1)}
+.corner.bl{left:-5px;bottom:-5px;transform:scaleY(-1)}.corner.br{right:-5px;bottom:-5px;transform:scale(-1,-1)}
+.silver .frame{background:linear-gradient(115deg,#4b5462,#eef3f9 30%,#8791a1 55%,#ffffff 78%,#4b5462)}
+.silver .inner{border-color:rgba(225,232,240,.25)}
+.gold .frame{background:linear-gradient(115deg,#6e4505,#ffe08a 30%,#b07a12 55%,#fff1b8 78%,#6e4505)}
+.gold .inner{border-color:rgba(255,215,106,.3)}
+.gold{box-shadow:0 0 24px -10px rgba(251,191,36,.55)}
+
+/* ---------- rank-up v2 ---------- */
+.stage{position:relative;padding-top:70px}
+.btn{font:600 12.5px Sora,sans-serif;color:var(--ink);background:rgba(124,58,237,.35);border:1px solid rgba(167,139,250,.5);
+  border-radius:999px;padding:8px 16px;cursor:pointer;margin:12px 8px 0 0}
+.btn:hover{background:rgba(124,58,237,.55)}
+.veil{position:absolute;inset:0;border-radius:12px;background:rgba(4,5,12,.75);opacity:0;pointer-events:none;z-index:3}
+.big{position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px;z-index:5;pointer-events:none;opacity:0}
+.big svg{width:100%;height:100%;filter:drop-shadow(0 0 16px rgba(255,214,106,.22))}
+.rays{position:absolute;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;z-index:4;pointer-events:none;opacity:0;border-radius:50%;
+  background:repeating-conic-gradient(from 0deg,rgba(255,224,138,.2) 0 6deg,transparent 6deg 22deg);
+  -webkit-mask:radial-gradient(circle,#000 18%,transparent 68%);mask:radial-gradient(circle,#000 18%,transparent 68%)}
+.shard{position:absolute;width:10px;height:14px;z-index:5;pointer-events:none;clip-path:polygon(50% 0,100% 100%,0 80%);
+  background:linear-gradient(135deg,#ffffff,#8791a1)}
+.ring{position:absolute;left:50%;top:50%;width:80px;height:80px;margin:-40px 0 0 -40px;border-radius:50%;border:2px solid rgba(255,224,138,.4);opacity:0;z-index:4;pointer-events:none}
+.trace{position:absolute;inset:-1px;z-index:6;pointer-events:none;overflow:visible}
+.trace rect{fill:none;stroke:#fff6d0;stroke-width:2;stroke-opacity:.6;filter:drop-shadow(0 0 4px rgba(255,215,106,.35))}
+.promo{position:absolute;left:50%;top:-30px;transform:translateX(-50%);font-family:Cinzel,Georgia,serif;font-weight:900;font-size:13px;letter-spacing:.26em;
+  padding:6px 18px;border-radius:4px;color:#f2c75c;white-space:nowrap;z-index:7;opacity:0;
+  background:linear-gradient(180deg,#1c1608,#0d0a04);border:1px solid #b9862a;
+  box-shadow:0 0 14px rgba(251,191,36,.18), inset 0 1px 0 rgba(255,224,138,.15)}
+.promo:before,.promo:after{content:"";position:absolute;top:50%;width:26px;height:2px;background:linear-gradient(90deg,transparent,#ffe08a)}
+.promo:before{right:100%;margin-right:6px}.promo:after{left:100%;margin-left:6px;transform:scaleX(-1)}
+
+/* banner kept from take 2 */
+.hang{position:absolute;left:12px;top:-14px;width:40px;height:84px;z-index:2}
+.pad-left{padding-left:58px}
+</style>
+<div class="wrap">
+  <h2>Our own rank crests</h2>
+  <p class="sub">League-spirited, but original. Each rank keeps everything the last had and adds a piece: Bronze is a shield with laurels.
+  Silver grows side blades. Gold gets wings and a crown. Platinum's wings widen around a teal gem with a halo. Diamond turns the shield into cut crystal.</p>
+  <div class="lineup" id="lineup"></div>
+
+  <h3>Rank-up, take 2</h3>
+  <p class="sub">Bigger, and still once only. The row dims and the old crest shatters. The new one bursts out large over the row with light rays,
+  then flies down into its slot while a line of light runs around the frame and turns it gold.</p>
+  <div class="stage"><div class="row pad-left silver" id="ru"></div></div>
+  <button class="btn" onclick="rankUp('silver','gold')">▶ Silver → Gold</button>
+  <button class="btn" onclick="rankUp('platinum','diamond')">▶ Platinum → Diamond</button>
+
+  <h3>Banner colour</h3>
+  <p class="sub">Tap one to dye the winner's banner on the row above.</p>
+  <div class="chips" id="chips"></div>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="m-bronze" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3c493"/><stop offset=".45" stop-color="#b0703a"/><stop offset="1" stop-color="#4e2a10"/></linearGradient>
+    <linearGradient id="m-silver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#aab4c3"/><stop offset="1" stop-color="#4a5361"/></linearGradient>
+    <linearGradient id="m-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff4c4"/><stop offset=".4" stop-color="#f2b51c"/><stop offset="1" stop-color="#7a4d05"/></linearGradient>
+    <linearGradient id="m-platinum" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0fffd"/><stop offset=".45" stop-color="#6fd9cc"/><stop offset="1" stop-color="#1a5c56"/></linearGradient>
+    <linearGradient id="m-diamond" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#b9a8ff"/><stop offset=".65" stop-color="#5fd3f0"/><stop offset="1" stop-color="#3424a8"/></linearGradient>
+    <linearGradient id="dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1f33"/><stop offset="1" stop-color="#0a0c18"/></linearGradient>
+    <radialGradient id="halo"><stop offset=".55" stop-color="rgba(143,240,227,0)"/><stop offset=".72" stop-color="rgba(143,240,227,.55)"/><stop offset=".8" stop-color="rgba(143,240,227,0)"/></radialGradient>
+    <radialGradient id="halo-d"><stop offset=".5" stop-color="rgba(185,168,255,0)"/><stop offset=".7" stop-color="rgba(185,168,255,.6)"/><stop offset=".82" stop-color="rgba(95,211,240,0)"/></radialGradient>
+    <linearGradient id="gem-red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb3a6"/><stop offset=".5" stop-color="#e2412f"/><stop offset="1" stop-color="#6e1209"/></linearGradient>
+    <linearGradient id="gem-teal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e6fffb"/><stop offset=".5" stop-color="#2fc4b2"/><stop offset="1" stop-color="#0c4d46"/></linearGradient>
+    <linearGradient id="g-trim" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b07a12"/><stop offset=".5" stop-color="#ffe08a"/><stop offset="1" stop-color="#b07a12"/></linearGradient>
+    <linearGradient id="g-banner" x1="0" y1="0" x2="0" y2="1"><stop id="bn-top" offset="0" stop-color="#5b21b6"/><stop id="bn-bot" offset="1" stop-color="#2e1065"/></linearGradient>
+  </defs>
+</svg>
+
+<script>
+const T = {
+  bronze:  {L:0,name:"Bronze",  at:3,  c:"#e0a36c"},
+  silver:  {L:1,name:"Silver",  at:7,  c:"#e1e8f0"},
+  gold:    {L:2,name:"Gold",    at:14, c:"#ffd76a"},
+  platinum:{L:3,name:"Platinum",at:30, c:"#8ff0e3"},
+  diamond: {L:4,name:"Diamond", at:100,c:"#c7b8ff"},
+};
+const SHIELD = "M50 20 L74 29 V52 C74 68 63 79 50 85 C37 79 26 68 26 52 V29 Z";
+const SHIELD_IN = "M50 26 L68 33 V52 C68 64.5 60 73 50 78 C40 73 32 64.5 32 52 V33 Z";
+
+function feathers(m, n, spread){
+  // fanned feathers on the left; mirrored for the right
+  let s="";
+  for(let i=0;i<n;i++){
+    const y = 36 + i*7, len = spread - i*5;
+    s += `<path d="M30 ${y} Q${30-len*.55} ${y-10} ${30-len} ${y-14+i*2} Q${30-len*.6} ${y+2} 30 ${y+6} Z" fill="url(#m-${m})" stroke="rgba(0,0,0,.35)" stroke-width=".6"/>`;
+  }
+  return `<g>${s}</g><g transform="translate(100 0) scale(-1 1)">${s}</g>`;
+}
+function crest(k){
+  const t = T[k], m = k, L = t.L;
+  let back = "", front = "";
+  // halo + rays (platinum / diamond)
+  if (L>=3) back += `<circle cx="50" cy="52" r="46" fill="url(#${L>=4?"halo-d":"halo"})"/>`;
+  if (L>=4){ let r=""; for(let i=0;i<12;i++){ r+=`<path d="M50 52 L${50+48*Math.cos(i*Math.PI/6-.06)} ${52+48*Math.sin(i*Math.PI/6-.06)} L${50+48*Math.cos(i*Math.PI/6+.06)} ${52+48*Math.sin(i*Math.PI/6+.06)} Z" fill="rgba(220,210,255,.18)"/>` } back += r; }
+  // wings
+  if (L>=2) back += feathers(m, L>=3?4:3, L>=3?30:22);
+  // side blades
+  if (L>=1) back += `<path d="M28 34 L8 46 L28 58 Z" fill="url(#m-${m})" stroke="rgba(0,0,0,.4)" stroke-width=".7"/><path d="M72 34 L92 46 L72 58 Z" fill="url(#m-${m})" stroke="rgba(0,0,0,.4)" stroke-width=".7"/>`;
+  // laurels at the foot
+  const laurel = `<g fill="url(#m-${m})" stroke="rgba(0,0,0,.35)" stroke-width=".5">
+     <ellipse cx="34" cy="84" rx="6" ry="2.6" transform="rotate(-30 34 84)"/><ellipse cx="29" cy="78" rx="6" ry="2.6" transform="rotate(-55 29 78)"/>
+     <ellipse cx="66" cy="84" rx="6" ry="2.6" transform="rotate(30 66 84)"/><ellipse cx="71" cy="78" rx="6" ry="2.6" transform="rotate(55 71 78)"/></g>`;
+  // crown on top (gold+)
+  const crown = L>=2 ? `<path d="M37 22 L40 10 L45 17 L50 6 L55 17 L60 10 L63 22 Z" fill="url(#m-${m})" stroke="rgba(0,0,0,.4)" stroke-width=".7"/>
+      <circle cx="50" cy="6" r="2.2" fill="${L>=3?"url(#gem-teal)":"url(#gem-red)"}"/>` : "";
+  // body: shield, or cut crystal for diamond
+  let body;
+  if (L>=4){
+    body = `<path d="M50 16 L76 34 L66 76 L50 88 L34 76 L24 34 Z" fill="url(#m-diamond)" stroke="#fff" stroke-opacity=".6" stroke-width="1"/>
+      <path d="M50 16 L60 38 L50 88 L40 38 Z" fill="rgba(255,255,255,.35)"/>
+      <path d="M24 34 L40 38 L34 76 Z" fill="rgba(40,30,140,.35)"/>
+      <path d="M76 34 L60 38 L66 76 Z" fill="rgba(255,255,255,.18)"/>
+      <path d="M24 34 L50 16 L76 34 L60 38 L50 32 L40 38 Z" fill="rgba(255,255,255,.45)"/>`;
+  } else {
+    const centre = L>=3
+      ? `<path d="M50 38 L60 50 L50 66 L40 50 Z" fill="url(#gem-teal)" stroke="#eafffc" stroke-width=".8"/><path d="M50 38 L55 50 L50 66 Z" fill="rgba(255,255,255,.25)"/>`
+      : L>=2
+      ? `<path d="M50 40 L58 51 L50 63 L42 51 Z" fill="url(#gem-red)" stroke="#ffe7d6" stroke-width=".8"/><path d="M50 40 L54 51 L50 63 Z" fill="rgba(255,255,255,.25)"/>`
+      : `<path d="M50 39 l3.6 7.3 8 1.2-5.8 5.6 1.4 8-7.2-3.8-7.2 3.8 1.4-8-5.8-5.6 8-1.2z" fill="url(#m-${m})" stroke="rgba(255,255,255,.5)" stroke-width=".6"/>`;
+    body = `<path d="${SHIELD}" fill="url(#m-${m})" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+      <path d="${SHIELD_IN}" fill="url(#dark)" stroke="url(#m-${m})" stroke-width="1.2"/>
+      <path d="M50 26 L68 33 V40 L50 34 L32 40 V33 Z" fill="rgba(255,255,255,.08)"/>
+      ${centre}`;
+  }
+  return `<svg viewBox="0 0 100 100">${back}${laurel}${body}${crown}</svg>`;
+}
+document.getElementById("lineup").innerHTML = Object.keys(T).map(k =>
+  `<div class="slot">${crest(k)}<div class="n" style="color:${T[k].c}">${T[k].name.toUpperCase()}</div><div class="d">${T[k].at}+ day streak</div></div>`).join("");
+
+// frames (from take 2)
+function corner(k){
+  const L=T[k].L, f=`url(#m-${k})`;
+  let s=`<path d="M4 26 V8 Q4 4 8 4 H26" fill="none" stroke="${f}" stroke-width="3" stroke-linecap="round"/>`;
+  if(L>=1) s+=`<path d="M10 22 V11 Q10 10 11 10 H22" fill="none" stroke="${f}" stroke-width="1.4" stroke-linecap="round"/>`;
+  if(L>=2) s+=`<path d="M26 4 q4 0 4 4 q0 3-3 3" fill="none" stroke="${f}" stroke-width="1.8" stroke-linecap="round"/><path d="M4 26 q0 4 4 4 q3 0 3-3" fill="none" stroke="${f}" stroke-width="1.8" stroke-linecap="round"/>
+    <rect x="3.6" y="3.6" width="6.5" height="6.5" rx="1" transform="rotate(45 6.85 6.85)" fill="url(#gem-${L>=3?"teal":"red"})" stroke="${f}"/>`;
+  return s;
+}
+function frame(k){ const c=cls=>`<svg class="corner ${cls}" viewBox="0 0 30 30">${corner(k)}</svg>`;
+  return `<span class="frame"></span><span class="inner"></span>${c("tl")}${c("tr")}${c("bl")}${c("br")}`; }
+const FRAME_CSS = {
+  platinum:["linear-gradient(115deg,#1f6b64,#c9fff7 30%,#3fa99c 55%,#eafffc 78%,#1f6b64)","rgba(143,240,227,.3)","0 0 26px -10px rgba(95,214,200,.55)"],
+  diamond:["linear-gradient(115deg,#3b2fb0,#f0e6ff 25%,#7f6bff 45%,#9ff0ff 65%,#c7b8ff 82%,#3b2fb0)","rgba(199,184,255,.35)","0 0 30px -10px rgba(139,120,255,.6)"],
+};
+function paint(row,k){
+  row.className = "row pad-left " + (k==="silver"||k==="gold" ? k : "");
+  row.querySelectorAll(".frame,.inner,.corner").forEach(e=>e.remove());
+  row.insertAdjacentHTML("afterbegin", frame(k));
+  if (FRAME_CSS[k]){ const [bg,inn,sh]=FRAME_CSS[k]; row.querySelector(".frame").style.background=bg; row.querySelector(".inner").style.borderColor=inn; row.style.boxShadow=sh; }
+  else row.style.boxShadow="";
+  row.querySelector(".emblem-slot").innerHTML = crest(k);
+  const lbl=row.querySelector(".tierlabel"); lbl.textContent=T[k].name; lbl.style.color=T[k].c;
+}
+const banner = `<svg class="hang" viewBox="0 0 40 84"><rect x="0" y="0" width="40" height="4" rx="2" fill="url(#g-trim)"/>
+  <path fill="url(#g-banner)" stroke="url(#g-trim)" stroke-width="1.4"><animate attributeName="d" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1;.45 0 .55 1"
+  values="M3 3 H37 V40 C37 56 37 66 37 76 L20 66 L3 76 C3 66 3 56 3 40 Z;M3 3 H37 V40 C38 56 36 66 39 77 L21 67 L5 75 C4 66 2 56 3 40 Z;M3 3 H37 V40 C36 56 38 66 35 75 L19 65 L1 77 C2 66 4 56 3 40 Z;M3 3 H37 V40 C37 56 37 66 37 76 L20 66 L3 76 C3 66 3 56 3 40 Z"/></path>
+  <path transform="translate(10 18)" d="M0 0 l4 6 6-9 6 9 4-6-2 13h-16z" fill="url(#g-trim)"/>
+  <text x="20" y="44" text-anchor="middle" font-family="Cinzel,Georgia,serif" font-weight="900" font-size="7" fill="#ffe08a" letter-spacing="1">WK 7</text></svg>`;
+const row = document.getElementById("ru");
+function build(k){
+  row.innerHTML = `<div class="rank">1</div>
+    <div class="who"><div class="av">A</div><div><div class="name">Adam</div><div class="meta">synced 4 min ago</div></div></div>
+    <div class="nums"><div class="cards">894<small>99 min</small></div>
+      <div class="streak"><span class="emblem-slot"></span><div><b id="sn">13</b><div class="tierlabel"></div></div></div></div>${banner}`;
+  paint(row,k);
+}
+build("silver");
+
+const BANNERS = [
+  ["Royal violet", "#5b21b6", "#2e1065"],
+  ["Crimson", "#9f1239", "#4c0519"],
+  ["Midnight", "#1e3a8a", "#0b1437"],
+  ["Emerald", "#047857", "#022c22"],
+  ["Onyx", "#27272a", "#09090b"],
+];
+const chips = document.getElementById("chips");
+chips.innerHTML = BANNERS.map(([n, a, b], i) =>
+  `<button class="chip" type="button" aria-pressed="${i === 0}" data-i="${i}"><i style="background:linear-gradient(${a},${b})"></i>${n}</button>`).join("");
+chips.addEventListener("click", (e) => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  const [, a, b] = BANNERS[c.dataset.i];
+  document.getElementById("bn-top").setAttribute("stop-color", a);
+  document.getElementById("bn-bot").setAttribute("stop-color", b);
+  chips.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x === c));
+});
+
+const ease = "cubic-bezier(.2,.8,.2,1)";
+function rankUp(from, to){
+  build(from);
+  row.querySelector("#sn").textContent = T[to].at;
+  const slot = row.querySelector(".emblem-slot");
+  const rr = row.getBoundingClientRect(), sr = slot.getBoundingClientRect();
+  const dx = (sr.left+sr.width/2) - (rr.left+rr.width/2), dy = (sr.top+sr.height/2) - (rr.top+rr.height/2);
+  const glow = to==="diamond" ? "#c7b8ff" : "#ffd76a";
+
+  const veil = Object.assign(document.createElement("div"),{className:"veil"});
+  const rays = Object.assign(document.createElement("div"),{className:"rays"});
+  const ring = Object.assign(document.createElement("div"),{className:"ring"});
+  const big  = Object.assign(document.createElement("div"),{className:"big"}); big.innerHTML = crest(to);
+  const promo= Object.assign(document.createElement("div"),{className:"promo",textContent:`Ranked up · ${T[to].name}`});
+  if (to==="diamond"){ ring.style.borderColor="rgba(199,184,255,.4)"; rays.style.background="repeating-conic-gradient(from 0deg,rgba(199,184,255,.22) 0 6deg,transparent 6deg 22deg)";
+    promo.style.background="linear-gradient(180deg,#15123a,#0a0820)"; promo.style.color="#c7b8ff"; promo.style.borderColor="#7f6bff"; promo.style.boxShadow="0 0 14px rgba(139,120,255,.2), inset 0 1px 0 rgba(199,184,255,.15)"; }
+  row.append(veil, rays, ring, big, promo);
+
+  // 1. old crest charges
+  const charge = slot.animate([{transform:"scale(1)"},{transform:"scale(.85) rotate(-6deg)"},{transform:"scale(1.15)"}],{duration:450,easing:"ease-in",fill:"forwards"});
+  veil.animate([{opacity:0},{opacity:1,offset:.15},{opacity:1,offset:.75},{opacity:0}],{duration:2600,fill:"forwards"});
+
+  setTimeout(()=>{
+    // 2. shatter
+    slot.style.opacity = 0;
+    const cx = sr.left - rr.left + sr.width/2, cy = sr.top - rr.top + sr.height/2;
+    for(let i=0;i<12;i++){
+      const s = document.createElement("span"); s.className="shard";
+      s.style.left=cx+"px"; s.style.top=cy+"px";
+      if(from==="platinum") s.style.background="linear-gradient(135deg,#f0fffd,#3fa99c)";
+      row.appendChild(s);
+      const a = i/12*Math.PI*2, d = 50+Math.random()*50;
+      s.animate([{transform:"translate(-50%,-50%) rotate(0)",opacity:1},{transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px) rotate(${360*Math.random()}deg)`,opacity:0}],{duration:700,easing:"cubic-bezier(.1,.7,.3,1)",fill:"forwards"});
+    }
+    // 3. new crest bursts out big over the row
+    big.animate([{opacity:0,transform:"scale(.2)"},{opacity:1,transform:"scale(1.25)",offset:.55},{opacity:1,transform:"scale(1)"}],{duration:600,easing:ease,fill:"forwards"});
+    rays.animate([{opacity:0,transform:"rotate(0) scale(.6)"},{opacity:1,transform:"rotate(40deg) scale(1)",offset:.3},{opacity:0,transform:"rotate(110deg) scale(1.1)"}],{duration:1900,easing:"ease-out",fill:"forwards"});
+    ring.animate([{opacity:.9,transform:"scale(.3)"},{opacity:0,transform:"scale(4)"}],{duration:900,easing:"ease-out",fill:"forwards"});
+    promo.animate([{opacity:0,transform:"translateX(-50%) translateY(10px) scale(.7)"},{opacity:1,transform:"translateX(-50%) scale(1.1)",offset:.12},{opacity:1,transform:"translateX(-50%) scale(1)",offset:.2},{opacity:1,transform:"translateX(-50%) scale(1)",offset:.85},{opacity:0,transform:"translateX(-50%) translateY(-6px)"}],{duration:2800,fill:"forwards"});
+  },450);
+
+  setTimeout(()=>{
+    // 4. light runs around the frame, and the frame turns the new metal behind it
+    const w=row.offsetWidth, h=row.offsetHeight, per=2*(w+h);
+    const tr = document.createElementNS("http://www.w3.org/2000/svg","svg"); tr.setAttribute("class","trace");
+    tr.setAttribute("width",w+2); tr.setAttribute("height",h+2);
+    tr.innerHTML=`<rect x="1" y="1" width="${w}" height="${h}" rx="12" stroke-dasharray="${per*.18} ${per}" style="stroke:${to==="diamond"?"#f0e6ff":"#fff6d0"}"/>`;
+    row.appendChild(tr);
+    tr.querySelector("rect").animate([{strokeDashoffset:0},{strokeDashoffset:-per*1.18}],{duration:900,easing:"ease-in-out",fill:"forwards"});
+    setTimeout(()=>{ paint(row,to); row.append(veil,rays,ring,big,promo,tr); slot.style.opacity=1; row.querySelector(".emblem-slot").style.opacity=0; },450);
+  },1250);
+
+  setTimeout(()=>{
+    // 5. the big crest flies down into its slot
+    big.animate([{opacity:1,transform:"translate(0,0) scale(1)"},{opacity:1,transform:`translate(${dx}px,${dy}px) scale(.35)`}],{duration:550,easing:"cubic-bezier(.6,0,.3,1)",fill:"forwards"});
+    setTimeout(()=>{ big.remove(); charge.cancel(); const s=row.querySelector(".emblem-slot"); s.style.opacity=1;
+      s.animate([{transform:"scale(1.3)",filter:`drop-shadow(0 0 8px ${glow}55)`},{transform:"scale(1)",filter:"drop-shadow(0 0 0 transparent)"}],{duration:600,easing:ease}); },540);
+  },1900);
+  setTimeout(()=>{ [veil,rays,ring,promo].forEach(e=>e.remove()); row.querySelectorAll(".shard,.trace").forEach(e=>e.remove()); },3400);
+}
+</script>
