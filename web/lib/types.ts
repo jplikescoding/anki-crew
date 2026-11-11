@@ -75,6 +75,9 @@ export type Engagement = {
   comments: Comment[];
 };
 
+export type Rank = "bronze" | "silver" | "gold" | "platinum" | "diamond";
+export type ShownRank = { rank: Rank | null; streak: number };
+
 export type PersonView = { profile: Profile; meta: Meta; days: DayRow[] };
 
 export type CrewResponse = {

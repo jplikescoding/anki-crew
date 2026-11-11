@@ -48,13 +48,18 @@ function knownZone(tz: string): boolean {
   }
 }
 
+/** Someone's zone, or the last zone on Earth when Intl doesn't know theirs. */
+export function zoneFor(p: PersonView): string {
+  return knownZone(p.profile.tz) ? p.profile.tz : "Etc/GMT+12";
+}
+
 /**
  * The Anki day it is now for someone. A zone Intl doesn't know (setup writes
  * "local" when left blank) is read as the last zone on Earth, so an unknown
  * clock can never hold a week open.
  */
 export function dayNow(p: PersonView, now: number): string {
-  return currentDayKey(knownZone(p.profile.tz) ? p.profile.tz : "Etc/GMT+12", p.meta.todayKey, now);
+  return currentDayKey(zoneFor(p), p.meta.todayKey, now);
 }
 
 function joinDay(p: PersonView): string {
