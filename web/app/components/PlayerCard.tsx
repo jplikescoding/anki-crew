@@ -2,9 +2,10 @@
 import { useEffect } from "react";
 import { Avatar } from "@/app/components/Avatar";
 import { tzTag } from "@/app/components/Board";
-import { StreakStar } from "@/app/components/primitives";
+import { StreakRank } from "@/app/components/primitives";
+import { rankStreak } from "@/lib/ranks";
 import { champion, headToHead, crewWeek, trophies, trophyCopy, type TileCopy, type WeekResult } from "@/lib/competition";
-import { currentStreak, daysLeftInWeek, personalBest, scoreNow } from "@/lib/metrics";
+import { daysLeftInWeek, personalBest, scoreNow } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -132,7 +133,7 @@ export default function PlayerCard({ person, people, viewer, results, onClose, o
 
         <div className="mx-5 mt-3 flex justify-between text-[12px]">
           <span><span style={{ color: "var(--ink-faint)" }}>All time</span> <b>{person.meta.allTimeReviews.toLocaleString()}</b></span>
-          <span><span style={{ color: "var(--ink-faint)" }}>Streak</span> <b><StreakStar streak={currentStreak(person.days, person.meta.todayKey)} /></b></span>
+          <span><span style={{ color: "var(--ink-faint)" }}>Streak</span> <b><StreakRank streak={rankStreak(person)} size={20} /></b></span>
           <span><span style={{ color: "var(--ink-faint)" }}>Best day</span> <b>{best ? best.reviews.toLocaleString() : "—"}</b></span>
         </div>
 

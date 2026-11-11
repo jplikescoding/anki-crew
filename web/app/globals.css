@@ -178,6 +178,27 @@ body {
   animation: rays-turn 40s linear infinite;
 }
 
+/* A rank frame's metal edge: the gradient, cut down to a 2px ring. */
+.rank-edge {
+  padding: 2px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+/* Diamond's corner gems catch the light now and then. Soft, brief, outside the text. */
+@keyframes gem-glint {
+  0%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); }
+  4%       { opacity: .85; transform: scale(1) rotate(20deg); }
+  9%       { opacity: 0; transform: scale(.4) rotate(40deg); }
+}
+.gem-glint {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gem-glint 5.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

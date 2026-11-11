@@ -1,12 +1,14 @@
 "use client";
 import {
-  crewDailyTotals, currentStreak, daysLeftInWeek, gapToNext, momentum, rankBy, rankDeltas, retention,
+  crewDailyTotals, daysLeftInWeek, gapToNext, momentum, rankBy, rankDeltas, retention,
   scoreNow, shiftDays, sinceWhen, totals, weekRows, weekStart,
 } from "@/lib/metrics";
 import type { Momentum, Range } from "@/lib/metrics";
 import type { DayRow, Look, PersonView } from "@/lib/types";
 import { Avatar } from "@/app/components/Avatar";
-import { CountUp, StreakStar, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
+import { CountUp, StreakRank, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
+import { RankCrest, RankFrame, WinnerBanner } from "@/app/components/RankArt";
+import { bannerColors, rankFor, rankStreak } from "@/lib/ranks";
 
 export type { Range };
 
@@ -16,7 +18,7 @@ const RETENTION_HELP =
   "Of the cards Anki showed you, the share you got right. A card you pressed Again on counts as a miss; Hard, Good and Easy all count as a hit. Cram sessions are excluded.";
 const CARDS_HELP =
   "Cards reviewed — every card Anki put in front of you, counted once per review. Filtered and crammed sessions don't count, so nobody can pad it.";
-const STREAK_HELP_COL = "Consecutive days with at least one review. The star changes at 3, 7, 14, 30 and 100 days.";
+const STREAK_HELP_COL = "Consecutive days with at least one review. The crest changes at 3, 7, 14, 30 and 100 days.";
 
 /** Today is their own day; This week is the viewer's week, as scoreNow scores it. */
 function daysFor(person: PersonView, range: Range, viewerDay: string): DayRow[] {
@@ -71,7 +73,7 @@ function trackFor(person: PersonView): TrackDay[] {
 }
 
 export default function Board({
-  people, viewer, range, seen, champion, celebrate, look, onSelect,
+  people, viewer, range, seen, champion, championWeek, celebrate, look, onSelect, held,
 }: {
   people: PersonView[];
   viewer: string | null;
@@ -79,12 +81,16 @@ export default function Board({
   seen?: Record<string, number>;
   /** Last finished week's winner; wears the crown until someone takes it. */
   champion?: string | null;
+  /** The crew week the champion won; lettered on their banner. */
+  championWeek?: number;
   /** The row playing a pass moment right now. */
   celebrate?: { id: string; tone: "gold" | "rose" } | null;
   /** What you saw on your previous visit; arrows compare against it. */
   look?: Look | null;
   /** Opens that person's panel. A row that reacts to a click should go somewhere. */
   onSelect?: (id: string) => void;
+  /** Streaks held at what each person was last seen at, until their rank moment plays. */
+  held?: Record<string, number>;
 }) {
   if (people.length === 0) {
     return (
@@ -128,6 +134,10 @@ export default function Board({
           const stale = Date.now() - p.meta.lastPublishAt > STALE_AFTER_MS;
           const delta = deltas[id] ?? 0;
           const move = moves[id];
+          const streak = held?.[id] ?? rankStreak(p);
+          const rank = rankFor(streak);
+          // Silver and up hang a banner; below that, the champion keeps the crown.
+          const banner = champion === id && bannerColors(rank) ? rank : null;
           const sweep = celebrate?.id === id ? (celebrate.tone === "gold" ? "overtaken" : "overtaken-rose") : "";
 
           return (
@@ -142,11 +152,17 @@ export default function Board({
                 style={{
                   gridTemplateColumns: "26px minmax(0,1fr) auto",
                   background: lead ? "var(--pane-lift)" : "var(--pane)",
-                  borderColor: lead ? "var(--edge-lit)" : "var(--edge)",
+                  // A ranked row's metal frame is its border.
+                  borderColor: rank ? "transparent" : lead ? "var(--edge-lit)" : "var(--edge)",
+                  // The banner hangs where the rank number was; move the number clear of it.
+                  paddingLeft: banner ? 58 : undefined,
                   animationDelay: `${i * 70}ms`,
                   opacity: stale ? 0.72 : 1,
                 }}
               >
+                {rank && <RankFrame rank={rank} />}
+                {banner && <WinnerBanner rank={banner} week={championWeek} />}
+
                 {/* rank + movement */}
                 <div className="flex flex-col items-center">
                   <span
@@ -192,7 +208,7 @@ export default function Board({
                     >
                       {p.profile.displayName}
                     </button>
-                    {champion === id && (
+                    {champion === id && !banner && (
                       <span data-testid="crown" title="Won last week" className="text-[12px]">👑</span>
                     )}
                     {you && (
@@ -224,6 +240,13 @@ export default function Board({
 
                 {/* numbers */}
                 <div className="flex items-center gap-4 sm:gap-6">
+                  {/* Phones have no streak column: the crest and number ride beside the cards. */}
+                  {rank && (
+                    <span className="-mr-2 flex items-center gap-1 text-[12px] tabular-nums sm:hidden" style={{ color: "var(--ink-dim)" }}>
+                      <RankCrest rank={rank} size={22} />
+                      {streak}
+                    </span>
+                  )}
                   <div className="text-right">
                     <CountUp
                       data-testid="reviews"
@@ -236,7 +259,7 @@ export default function Board({
                     </div>
                   </div>
                   <div className="hidden text-right text-[13px] sm:block" style={{ color: "var(--ink-dim)" }}>
-                    <StreakStar streak={currentStreak(p.days, p.meta.todayKey)} />
+                    <StreakRank streak={streak} />
                     <div data-testid="retention" className="mt-[3px] text-[11.5px]" style={{ color: ret === null ? "var(--ink-ghost)" : "var(--jade)" }}>
                       {ret === null ? "—" : `${ret}%`}
                     </div>

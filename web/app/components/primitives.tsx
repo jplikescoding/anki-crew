@@ -2,6 +2,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { streakTier } from "@/lib/metrics";
+import { RANK_NAME, rankFor } from "@/lib/ranks";
+import { RANK_FONT, RANK_INK, RankCrest } from "@/app/components/RankArt";
+import { useReducedMotion } from "@/app/components/useReducedMotion";
 
 /* ------------------------------------------------------------------ tooltip */
 
@@ -69,18 +72,6 @@ export function Tooltip({ label, children, width = 240 }: { label: ReactNode; ch
 
 /* ----------------------------------------------------------------- count-up */
 
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(m.matches);
-    const on = () => setReduced(m.matches);
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, []);
-  return reduced;
-}
-
 /**
  * Rolls from what you last saw up to what is true now.
  *
@@ -114,31 +105,32 @@ export function CountUp({
   return <span className={className} {...rest}>{shown.toLocaleString()}</span>;
 }
 
-/* -------------------------------------------------------------- streak star */
+/* ------------------------------------------------------------- streak rank */
 
-const TIER_STYLE = [
-  { color: "var(--ink-ghost)", glow: "none", char: "☆" },
-  { color: "#D8C08A", glow: "none", char: "★" },
-  { color: "var(--gold)", glow: "none", char: "★" },
-  { color: "var(--gold)", glow: "0 0 10px rgba(251,191,36,.45)", char: "★" },
-  { color: "#FB923C", glow: "0 0 14px rgba(251,146,60,.55)", char: "★" },
-  { color: "#F472B6", glow: "0 0 18px rgba(244,114,182,.6)", char: "✦" },
-];
-
-export function StreakStar({ streak }: { streak: number }) {
-  const { tier, nextAt, daysToNext } = streakTier(streak);
-  const s = TIER_STYLE[tier];
+/** Crest (once ranked), the streak, and the rank's name in small caps. */
+export function StreakRank({ streak, size = 30 }: { streak: number; size?: number }) {
+  const rank = rankFor(streak);
+  const { nextAt, daysToNext } = streakTier(streak);
+  const next = nextAt === null ? null : rankFor(nextAt);
   const label =
     streak === 0
       ? "No streak yet. Study on two days in a row to start one."
-      : daysToNext === null
-        ? `${streak} days running — the top tier. Nothing left to climb.`
-        : `${streak} days running. ${daysToNext} more to reach the ${nextAt}-day tier.`;
+      : next === null
+        ? `${streak} days running — Diamond, the top rank.`
+        : `${streak} days running. ${daysToNext} more to reach ${RANK_NAME[next]}.`;
   return (
     <Tooltip label={label}>
-      <span className="tabular-nums">
-        {streak}
-        <span style={{ color: s.color, textShadow: s.glow }} className="ml-1">{s.char}</span>
+      <span className="inline-flex items-center gap-1.5 tabular-nums">
+        {rank && <RankCrest rank={rank} size={size} />}
+        <span>{streak}</span>
+        {rank && (
+          <span
+            className="text-[9.5px] font-black uppercase tracking-[.16em]"
+            style={{ fontFamily: RANK_FONT, color: RANK_INK[rank] }}
+          >
+            {RANK_NAME[rank]}
+          </span>
+        )}
       </span>
     </Tooltip>
   );

@@ -1,9 +1,10 @@
 "use client";
-import { bestStreak, currentStreak, deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
+import { bestStreak, deckTotals, personalBest, retention, shiftDays, totals } from "@/lib/metrics";
 import { plainText, resolveCard } from "@/lib/fields";
 import type { FeedItem, FieldMaps, PersonView } from "@/lib/types";
 import { trophies, trophyCopy, type WeekResult } from "@/lib/competition";
-import { StatTile, StreakStar } from "@/app/components/primitives";
+import { StatTile, StreakRank } from "@/app/components/primitives";
+import { rankStreak } from "@/lib/ranks";
 
 function prettyDate(iso: string, withYear = false) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -58,9 +59,9 @@ export default function PersonPanel({ person, items, fieldMaps, results = [] }: 
           tint="var(--gold)"
           glow="rgba(251,191,36,.15)"
           delay={220}
-          help="Consecutive days with at least one review. Miss a whole day and it starts again. The star changes at 3, 7, 14, 30 and 100 days."
+          help="Consecutive days with at least one review. Miss a whole day and it starts again. The crest changes at 3, 7, 14, 30 and 100 days."
         >
-          <StreakStar streak={currentStreak(person.days, person.meta.todayKey)} />
+          <StreakRank streak={rankStreak(person)} />
         </StatTile>
         <StatTile
           label="All time"

@@ -1,6 +1,7 @@
 "use client";
-import { currentStreak, personalBest, shiftDays, totals, weekStart } from "@/lib/metrics";
+import { personalBest, shiftDays, totals, weekStart } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
+import { rankStreak } from "@/lib/ranks";
 import { StatTile } from "@/app/components/primitives";
 
 function prettyDate(iso: string) {
@@ -40,7 +41,7 @@ export default function StatTiles({ people, viewer }: { people: PersonView[]; vi
   const trend = lastWeek === 0 ? null : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
 
   const longest = people.reduce((top, p) => {
-    const streak = currentStreak(p.days, p.meta.todayKey);
+    const streak = rankStreak(p);
     return streak > top.streak ? { streak, who: p.profile.displayName } : top;
   }, { streak: 0, who: "" });
 

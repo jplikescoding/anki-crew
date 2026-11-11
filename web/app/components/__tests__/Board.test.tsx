@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import Board from "@/app/components/Board";
 import type { DayRow, Look, PersonView } from "@/lib/types";
+import { shiftDays } from "@/lib/metrics";
 
 function day(date: string, over: Partial<DayRow> = {}): DayRow {
   return { date, reviews: 0, minutes: 0, newCards: 0, ease1: 0, ease2: 0,
@@ -123,9 +124,50 @@ describe("Board", () => {
   });
 
   it("crowns the champion", () => {
+    // Andy has no rank, so he keeps the crown rather than a banner.
     render(<Board people={[JP, ANDY]} viewer="jp" range="today" champion="andy" />);
     expect(within(screen.getByTestId("row-andy")).getByTestId("crown")).toBeTruthy();
     expect(within(screen.getByTestId("row-jp")).queryByTestId("crown")).toBeNull();
+  });
+
+  /** Studied every day for `n` days, ending on todayKey. */
+  const run = (n: number) =>
+    Array.from({ length: n }, (_, i) => day(shiftDays("2026-09-21", i - n + 1), { reviews: 10 }));
+  const SILVER_JP = person("jp", "JP", NY, run(7));
+  const ANDY_2 = person("andy", "Andy", NY, run(2));
+
+  it("frames a ranked row in its metal and leaves an unranked row plain", () => {
+    render(<Board people={[SILVER_JP, ANDY_2]} viewer="jp" range="today" />);
+    expect(within(screen.getByTestId("row-jp")).getByTestId("frame-silver")).toBeTruthy();
+    expect(within(screen.getByTestId("row-andy")).queryByTestId(/^frame-/)).toBeNull();
+  });
+
+  it("shows the crest and rank name in the streak column", () => {
+    render(<Board people={[SILVER_JP, ANDY_2]} viewer="jp" range="today" />);
+    const row = within(screen.getByTestId("row-jp"));
+    expect(row.getAllByTestId("crest-silver").length).toBeGreaterThan(0);
+    expect(row.getByText("Silver")).toBeTruthy();
+  });
+
+  it("hangs a banner for a Silver-or-better champion, coloured by rank", () => {
+    render(<Board people={[SILVER_JP, ANDY_2]} viewer="jp" range="today" champion="jp" championWeek={7} />);
+    const banner = within(screen.getByTestId("row-jp")).getByTestId("banner");
+    expect(banner).toHaveAttribute("data-rank", "silver");
+    expect(banner).toHaveTextContent("WK 7");
+    expect(screen.queryByTestId("crown")).toBeNull();
+  });
+
+  it("keeps the crown for a champion below Silver", () => {
+    render(<Board people={[SILVER_JP, ANDY_2]} viewer="jp" range="today" champion="andy" championWeek={7} />);
+    expect(within(screen.getByTestId("row-andy")).getByTestId("crown")).toBeTruthy();
+    expect(screen.queryByTestId("banner")).toBeNull();
+  });
+
+  it("shows a held streak instead of the live one", () => {
+    render(<Board people={[SILVER_JP, ANDY_2]} viewer="jp" range="today" held={{ jp: 20 }} />);
+    const row = within(screen.getByTestId("row-jp"));
+    expect(row.getByTestId("frame-gold")).toBeTruthy();
+    expect(row.getAllByText("20").length).toBeGreaterThan(0);
   });
 
   it("sweeps your row gold for a pass and rose for being passed", () => {
