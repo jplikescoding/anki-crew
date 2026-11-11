@@ -18,7 +18,7 @@ import { lookFrom } from "@/lib/metrics";
 import { ackPatch, heldStreaks, isRankMoment, pendingMoments, silentPatch, type Moment } from "@/lib/moments";
 import { newNotesFor, settleNote } from "@/lib/notes";
 import { readSeen, writeSeen, type Seen } from "@/lib/seen";
-import { playCelebration } from "@/lib/sound";
+import { playCelebration, unlockSound } from "@/lib/sound";
 import { FLOOR, NOTES_SEEN, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
 import type { CompetitionState, CrewNote, CrewResponse, Engagement, FieldMap, Look, NoteCard, PersonView, Rank } from "@/lib/types";
@@ -330,6 +330,7 @@ export default function Page() {
 
   const playMoments = useCallback(() => {
     if (!data) return;
+    unlockSound();
     if (soundHint) {
       setSoundHinted(true);
       try { localStorage.setItem(SOUND_HINT_KEY, "1"); } catch { /* storage blocked */ }

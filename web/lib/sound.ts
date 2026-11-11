@@ -9,10 +9,24 @@
  */
 type Ctor = typeof AudioContext;
 
+// One context for every sound, kept open: iOS only lets a context start from
+// inside a tap, and a moment's sounds play seconds after it.
+let shared: AudioContext | null = null;
+
 function audioContext(): AudioContext | null {
+  if (shared && shared.state !== "closed") return shared;
   const w = window as unknown as { AudioContext?: Ctor; webkitAudioContext?: Ctor };
   const C = w.AudioContext ?? w.webkitAudioContext;
-  return C ? new C() : null;
+  shared = C ? new C() : null;
+  return shared;
+}
+
+/** Call from inside a tap: creates or wakes the shared context, so later sounds may play. */
+export function unlockSound(): void {
+  try {
+    const ctx = audioContext();
+    if (ctx && ctx.state !== "running") void ctx.resume();
+  } catch { /* no audio */ }
 }
 
 /** Two notes, a rising interval, ~450ms. Synthesised so there is no asset to load. */
@@ -33,7 +47,6 @@ function ring(ctx: AudioContext): void {
     osc.start(now + at);
     osc.stop(now + at + len + 0.02);
   });
-  window.setTimeout(() => { void ctx.close(); }, 900);
 }
 
 /**
@@ -59,7 +72,6 @@ function ching(ctx: AudioContext): void {
     osc.start(now);
     osc.stop(now + 0.62);
   });
-  window.setTimeout(() => { void ctx.close(); }, 900);
 }
 
 /**
@@ -98,7 +110,6 @@ function crumble(ctx: AudioContext): void {
   thump.start(now);
   thump.stop(now + 0.37);
 
-  window.setTimeout(() => { void ctx.close(); }, 900);
 }
 
 const waiting = new Set<(ctx: AudioContext) => void>();
@@ -112,28 +123,25 @@ const waiting = new Set<(ctx: AudioContext) => void>();
  * plays then, which is when you are looking at the row anyway.
  */
 function whenAllowed(play: (ctx: AudioContext) => void): void {
-  let ctx: AudioContext | null = null;
   try {
-    ctx = audioContext();
+    const ctx = audioContext();
     if (!ctx) return;
     if (ctx.state === "suspended") {
-      void ctx.close();
       if (waiting.has(play)) return;
       waiting.add(play);
       const fire = () => {
         waiting.delete(play);
         window.removeEventListener("pointerdown", fire);
         window.removeEventListener("keydown", fire);
-        whenAllowed(play);
+        // Resumed inside the touch; played once it has actually started.
+        ctx.resume().then(() => whenAllowed(play), () => {});
       };
       window.addEventListener("pointerdown", fire);
       window.addEventListener("keydown", fire);
       return;
     }
     play(ctx);
-  } catch {
-    void ctx?.close();
-  }
+  } catch { /* no audio */ }
 }
 
 /** The overtake chime. */

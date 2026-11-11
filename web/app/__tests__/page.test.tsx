@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act, within, cleanup } from "@testing-library/react";
 import Page from "@/app/page";
-import { playCelebration, playChing } from "@/lib/sound";
+import { playCelebration, playChing, unlockSound } from "@/lib/sound";
 import { NOTES } from "@/lib/whatsNew";
 import type { CompetitionState, CrewNote, CrewResponse, Engagement, PersonView } from "@/lib/types";
 
-vi.mock("@/lib/sound", () => ({ playCelebration: vi.fn(), playChing: vi.fn(), playCrumble: vi.fn() }));
+vi.mock("@/lib/sound", () => ({
+  playCelebration: vi.fn(), playChing: vi.fn(), playCrumble: vi.fn(), unlockSound: vi.fn(),
+}));
 
 const TODAY = "2026-09-23";
 
@@ -562,7 +564,9 @@ describe("the weekly race", () => {
       await mount();
       const pill = await screen.findByTestId("moment-pill");
       fakeTimers();
+      vi.mocked(unlockSound).mockClear();
       fireEvent.click(pill);
+      expect(unlockSound).toHaveBeenCalledTimes(1);
       expect(competitionPosts().some((b) => b.ranks?.adam?.rank === "gold" && b.ranks.adam.streak === 14)).toBe(true);
       advance(1000); // before the swap
       expect(row("adam").getAllByTestId("frame-silver").length).toBeGreaterThan(0);
