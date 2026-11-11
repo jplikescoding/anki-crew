@@ -199,6 +199,10 @@ body {
   animation: gem-glint 5.4s ease-in-out infinite;
 }
 
+/* While a rank moment plays over a row, the row's own crests step aside: the
+   moment draws its own copies, and hands back when the new crest lands. */
+[data-rank-hold] > :not([data-rank-moment]) [data-testid^="crest-"] { opacity: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

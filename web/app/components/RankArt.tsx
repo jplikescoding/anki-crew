@@ -24,7 +24,8 @@ export const RANK_INK: Record<Rank, string> = {
 
 export const RANK_FONT = "var(--font-cinzel), Georgia, serif";
 
-const METAL: Record<Rank, [number, string][]> = {
+/** Each rank's metal, as gradient stops from highlight to shadow. */
+export const METAL: Record<Rank, [number, string][]> = {
   bronze: [[0, "#f3c493"], [0.45, "#b0703a"], [1, "#4e2a10"]],
   silver: [[0, "#ffffff"], [0.45, "#aab4c3"], [1, "#4a5361"]],
   gold: [[0, "#fff4c4"], [0.4, "#f2b51c"], [1, "#7a4d05"]],
