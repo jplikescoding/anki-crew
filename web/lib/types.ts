@@ -47,6 +47,8 @@ export type Meta = {
   lastPublishAt: number;
   streak: number;
   todayKey: string;
+  /** The day the publisher reported at its last sync; the crew route keeps it before rolling todayKey on. */
+  syncedKey?: string;
   allTimeReviews: number;
   firstReviewAt: number;
 };

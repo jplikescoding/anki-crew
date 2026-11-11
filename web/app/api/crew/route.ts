@@ -20,10 +20,11 @@ export async function GET(req: Request) {
   // day it is now for them, so a stale "today" reads as nothing yet rather
   // than as yesterday's cards. An unknown zone is read as the last zone on
   // Earth, as the weekly race reads it, so their today and streak still roll.
+  // The reported day is kept as syncedKey: ranks judge a sync by it.
   const now = Date.now();
   const people = loaded
     .filter((p): p is PersonView => p !== null)
-    .map((p) => ({ ...p, meta: { ...p.meta, todayKey: dayNow(p, now) } }));
+    .map((p) => ({ ...p, meta: { ...p.meta, syncedKey: p.meta.todayKey, todayKey: dayNow(p, now) } }));
   const feed = await getFeed();
   const engagement = await getEngagement(feed.map((f) => f.id));
   const seen = await getSeen(viewer);

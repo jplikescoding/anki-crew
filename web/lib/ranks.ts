@@ -28,7 +28,7 @@ export function rankOrder(rank: Rank | null): number {
  * when Anki closes.
  */
 export function rankStreak(p: PersonView): number {
-  const synced = currentDayKey(zoneFor(p), "", p.meta.lastPublishAt);
+  const synced = p.meta.syncedKey ?? currentDayKey(zoneFor(p), "", p.meta.lastPublishAt);
   const floor = shiftDays(p.meta.todayKey, -1);
   const asOf = synced >= p.meta.todayKey ? p.meta.todayKey : synced > floor ? synced : floor;
   return currentStreak(p.days, asOf);

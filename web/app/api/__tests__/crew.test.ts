@@ -104,6 +104,14 @@ describe("GET /api/crew", () => {
       const res = await GET(new Request("https://x.test/api/crew?key=key_jp"));
       expect((await res.json()).people[0].meta.todayKey).toBe("2026-09-22");
     });
+
+    it("keeps the day the publisher reported as the day it synced", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.UTC(2026, 8, 22, 15));
+      const meta = (await (await GET(new Request("https://x.test/api/crew?key=key_jp"))).json()).people[0].meta;
+      expect(meta.syncedKey).toBe("2026-09-21");
+      expect(meta.todayKey).toBe("2026-09-22");
+    });
   });
 
   describe("is it in my deck", () => {

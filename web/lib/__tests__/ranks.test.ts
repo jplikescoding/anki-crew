@@ -57,6 +57,26 @@ describe("rankStreak", () => {
   it("never synced is no streak, not a crash", () => {
     expect(rankStreak(person([], 0))).toBe(0);
   });
+
+  describe("an unknown (\"local\") zone", () => {
+    // A Berlin user (UTC+1 in November) with the zone left blank. todayKey is
+    // what the crew route rolled it to; syncedKey is the day they reported.
+    const local = (days: DayRow[], lastPublishAt: number, syncedKey: string, todayKey = "2026-11-11"): PersonView => {
+      const p = person(days, lastPublishAt, todayKey);
+      return { ...p, profile: { ...p.profile, tz: "local" }, meta: { ...p.meta, syncedKey } };
+    };
+    const berlin = (d: number, h: number) => Date.UTC(2026, 10, d, h - 1);
+
+    it("counts today when a morning sync reported today", () => {
+      expect(rankStreak(local(run(5, 11), berlin(11, 10), "2026-11-11"))).toBe(7);
+    });
+    it("judges a sync that reported yesterday as the floor, missing today unhurt", () => {
+      expect(rankStreak(local(run(4, 10), berlin(10, 22), "2026-11-10"))).toBe(7);
+    });
+    it("still graces the floor day itself when the reported day is the floor", () => {
+      expect(rankStreak(local(run(4, 9), berlin(10, 22), "2026-11-10"))).toBe(6);
+    });
+  });
 });
 
 describe("shownRank", () => {
