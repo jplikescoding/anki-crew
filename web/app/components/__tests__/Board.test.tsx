@@ -195,6 +195,22 @@ describe("Board", () => {
     }
   });
 
+  it("lifts a stale row out of its dimming while its rank moment plays", () => {
+    const old = { lastPublishAt: Date.now() - 1000 * 60 * 60 * 9 };
+    const jp = { ...SILVER_JP, meta: { ...SILVER_JP.meta, ...old } };
+    const andy = { ...ANDY_2, meta: { ...ANDY_2.meta, ...old } };
+    render(
+      <Board people={[jp, andy]} viewer="jp" range="today"
+        rankPlay={{ id: "jp", kind: "crumble", from: "silver", to: null }} />,
+    );
+    const playing = screen.getByTestId("row-jp");
+    expect(playing.style.opacity).toBe("1");
+    expect(playing.style.zIndex).toBe("10");
+    const other = screen.getByTestId("row-andy");
+    expect(other.style.opacity).toBe("0.72");
+    expect(other.style.zIndex).toBe("");
+  });
+
   it("sweeps your row gold for a pass and rose for being passed", () => {
     const { rerender } = render(<Board people={[JP, ANDY]} viewer="jp" range="today" celebrate={{ id: "jp", tone: "gold" }} />);
     expect(screen.getByTestId("row-jp").className).toContain("overtaken");

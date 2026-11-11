@@ -148,6 +148,7 @@ export default function Board({
           // Silver and up hang a banner; below that, the champion keeps the crown.
           const banner = champion === id && bannerColors(rank) ? rank : null;
           const sweep = celebrate?.id === id ? (celebrate.tone === "gold" ? "overtaken" : "overtaken-rose") : "";
+          const playing = rankPlay?.id === id;
 
           return (
             <li key={id}>
@@ -166,7 +167,10 @@ export default function Board({
                   // The banner hangs where the rank number was; move the number clear of it.
                   paddingLeft: banner ? 58 : undefined,
                   animationDelay: `${i * 70}ms`,
-                  opacity: stale ? 0.72 : 1,
+                  // Dimming makes the row its own stacking context: the moment
+                  // playing on it must sit over the rows below, at full strength.
+                  opacity: stale && !playing ? 0.72 : 1,
+                  zIndex: playing ? 10 : undefined,
                 }}
               >
                 {rank && <RankFrame rank={rank} />}
