@@ -4,9 +4,8 @@ import { crewDailyTotals } from "@/lib/metrics";
 import type { PersonView } from "@/lib/types";
 
 // Fixed hues per position so a person keeps their colour between the chart,
-// the legend and the feed. Volume colours stay in the violet→cyan family;
-// gold is borrowed only when there is a third person.
-const HUES = ["var(--violet)", "var(--cyan)", "var(--gold)"];
+// the legend and the feed. One distinct hue per crew member so no two repeat.
+const HUES = ["var(--violet)", "var(--cyan)", "var(--gold)", "#34D399", "#F472B6"];
 
 function prettyDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -15,9 +14,11 @@ function prettyDate(iso: string) {
 }
 
 /** Fourteen days, stacked, everyone at once — who has actually been showing up. */
-export default function CrewChart({ people }: { people: PersonView[] }) {
+export default function CrewChart({ people: unsorted }: { people: PersonView[] }) {
   const [hover, setHover] = useState<number | null>(null);
-  if (people.length === 0) return null;
+  if (unsorted.length === 0) return null;
+  // The incoming order isn't stable between loads; sort so each person keeps their hue.
+  const people = [...unsorted].sort((a, b) => a.profile.id.localeCompare(b.profile.id));
 
   const rows = crewDailyTotals(people, people[0].meta.todayKey, 14);
   const peak = Math.max(1, ...rows.map((r) => r.total));
