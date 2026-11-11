@@ -4,10 +4,11 @@ import {
   scoreNow, shiftDays, sinceWhen, totals, weekRows, weekStart,
 } from "@/lib/metrics";
 import type { Momentum, Range } from "@/lib/metrics";
-import type { DayRow, Look, PersonView } from "@/lib/types";
+import type { DayRow, Look, PersonView, Rank } from "@/lib/types";
 import { Avatar } from "@/app/components/Avatar";
 import { CountUp, StreakRank, Tooltip, Track, type TrackDay } from "@/app/components/primitives";
 import { RankCrest, RankFrame, WinnerBanner } from "@/app/components/RankArt";
+import { RankMoment } from "@/app/components/RankMoment";
 import { bannerColors, rankFor, rankStreak } from "@/lib/ranks";
 
 export type { Range };
@@ -74,6 +75,7 @@ function trackFor(person: PersonView): TrackDay[] {
 
 export default function Board({
   people, viewer, range, seen, champion, championWeek, celebrate, look, onSelect, held,
+  rankPlay, onRankSwap, onRankDone,
 }: {
   people: PersonView[];
   viewer: string | null;
@@ -91,6 +93,11 @@ export default function Board({
   onSelect?: (id: string) => void;
   /** Streaks held at what each person was last seen at, until their rank moment plays. */
   held?: Record<string, number>;
+  /** The rank moment playing over a row right now. */
+  rankPlay?: { id: string; kind: "rankUp" | "crumble"; from: Rank | null; to: Rank | null } | null;
+  /** The row should switch to its new rank underneath the moment. */
+  onRankSwap?: () => void;
+  onRankDone?: () => void;
 }) {
   if (people.length === 0) {
     return (
@@ -123,7 +130,9 @@ export default function Board({
 
   return (
     <section>
-      <ol className="space-y-2 px-3">
+      {/* A rank-up's plate is wider than a phone's row: clip it at the screen's
+          edge rather than let the page scroll sideways. Vertical stays open. */}
+      <ol className="space-y-2 px-3" style={{ overflowX: "clip" }}>
         {ranked.map((p, i) => {
           const id = p.profile.id;
           const scoped = daysFor(p, range, viewerDay);
@@ -162,6 +171,17 @@ export default function Board({
               >
                 {rank && <RankFrame rank={rank} />}
                 {banner && <WinnerBanner rank={banner} week={championWeek} />}
+                {/* A direct child of the row: the moment finds the row through its parent. */}
+                {rankPlay?.id === id && (
+                  <RankMoment
+                    key={id}
+                    kind={rankPlay.kind}
+                    from={rankPlay.from}
+                    to={rankPlay.to}
+                    onSwap={() => onRankSwap?.()}
+                    onDone={() => onRankDone?.()}
+                  />
+                )}
 
                 {/* rank + movement */}
                 <div className="flex flex-col items-center">

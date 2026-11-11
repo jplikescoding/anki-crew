@@ -1,9 +1,11 @@
 // web/app/components/__tests__/Board.test.tsx
-import { describe, it, expect } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { act, render, screen, within } from "@testing-library/react";
 import Board from "@/app/components/Board";
 import type { DayRow, Look, PersonView } from "@/lib/types";
 import { shiftDays } from "@/lib/metrics";
+
+vi.mock("@/lib/sound", () => ({ playChing: vi.fn(), playCrumble: vi.fn() }));
 
 function day(date: string, over: Partial<DayRow> = {}): DayRow {
   return { date, reviews: 0, minutes: 0, newCards: 0, ease1: 0, ease2: 0,
@@ -168,6 +170,29 @@ describe("Board", () => {
     const row = within(screen.getByTestId("row-jp"));
     expect(row.getByTestId("frame-gold")).toBeTruthy();
     expect(row.getAllByText("20").length).toBeGreaterThan(0);
+  });
+
+  it("plays a rank moment over that row only, and reports its swap and its end", () => {
+    vi.useFakeTimers();
+    try {
+      const onSwap = vi.fn();
+      const onDone = vi.fn();
+      render(
+        <Board people={[SILVER_JP, ANDY_2]} viewer="jp" range="today"
+          rankPlay={{ id: "jp", kind: "rankUp", from: "bronze", to: "silver" }}
+          onRankSwap={onSwap} onRankDone={onDone} />,
+      );
+      // A direct child of the row: it finds the row through its parent.
+      expect(screen.getByTestId("row-jp").querySelector(":scope > [data-rank-moment]")).not.toBeNull();
+      expect(screen.getByTestId("row-andy").querySelector("[data-rank-moment]")).toBeNull();
+      act(() => { vi.advanceTimersByTime(1700); });
+      expect(onSwap).toHaveBeenCalledTimes(1);
+      expect(onDone).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(1700); });
+      expect(onDone).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("sweeps your row gold for a pass and rose for being passed", () => {

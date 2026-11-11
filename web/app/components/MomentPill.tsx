@@ -3,16 +3,18 @@ import { momentHeadline, type Moment } from "@/lib/moments";
 import type { PersonView } from "@/lib/types";
 
 /** What happened while you were away, named, waiting for a tap. The tap is also what lets sound play. */
-export default function MomentPill({ moments, people, viewer, onPlay }: {
+export default function MomentPill({ moments, people, viewer, onPlay, soundHint }: {
   moments: Moment[];
   people: PersonView[];
   viewer: string | null;
   onPlay: () => void;
+  /** Says the moments make a sound, the first time a rank moment waits. */
+  soundHint?: boolean;
 }) {
   if (moments.length === 0) return null;
-  const rose = moments[0].kind === "passedBy";
+  const rose = moments[0].kind === "passedBy" || moments[0].kind === "crumble";
   return (
-    <div className="flex justify-center px-5 pb-2">
+    <div className="flex flex-col items-center px-5 pb-2">
       <button
         data-testid="moment-pill"
         onClick={onPlay}
@@ -25,6 +27,11 @@ export default function MomentPill({ moments, people, viewer, onPlay }: {
         {moments.length > 1 && <span style={{ color: "var(--ink-faint)" }}> + {moments.length - 1} more</span>}
         <span style={{ color: "var(--ink-faint)" }}>tap ▸</span>
       </button>
+      {soundHint && (
+        <p data-testid="sound-hint" className="mt-1.5 text-[11px]" style={{ color: "var(--ink-faint)" }}>
+          🔊 These have sound, turn it up
+        </p>
+      )}
     </div>
   );
 }

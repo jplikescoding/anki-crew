@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act, within, cleanup } from "@testing-library/react";
 import Page from "@/app/page";
-import { playCelebration } from "@/lib/sound";
+import { playCelebration, playChing } from "@/lib/sound";
 import { NOTES } from "@/lib/whatsNew";
-import type { CrewNote, CrewResponse, Engagement, PersonView } from "@/lib/types";
+import type { CompetitionState, CrewNote, CrewResponse, Engagement, PersonView } from "@/lib/types";
 
-vi.mock("@/lib/sound", () => ({ playCelebration: vi.fn() }));
+vi.mock("@/lib/sound", () => ({ playCelebration: vi.fn(), playChing: vi.fn(), playCrumble: vi.fn() }));
 
 const TODAY = "2026-09-23";
 
@@ -72,6 +72,7 @@ beforeEach(() => {
   });
   vi.stubGlobal("fetch", fetchMock);
   vi.mocked(playCelebration).mockClear();
+  vi.mocked(playChing).mockClear();
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -525,6 +526,86 @@ describe("the weekly race", () => {
     crewReplies.push(race({ results: { "2026-09-21": "adam" }, look: saved }, [50, 40]));
     await mount();
     expect(screen.getByTestId("delta-jp").textContent).toBe("▲1");
+  });
+
+  describe("rank moments", () => {
+    const NOW = new Date("2026-09-29T15:00:00Z");
+    /** Studied every day for `n` days, ending today (Tuesday 29 Sep). */
+    const run = (n: number): [string, number][] =>
+      Array.from({ length: n }, (_, i) => [new Date(Date.UTC(2026, 8, 29 - n + 1 + i)).toISOString().slice(0, 10), 10]);
+    // Adam is on 14 (Gold); JP studied once last week and today, so he's on 1 (no rank).
+    const ranked = (ranks: CompetitionState["ranks"]) => ok({
+      ...crew(),
+      people: [
+        racer("adam", "Adam", run(14)),
+        racer("jp", "JP", [["2026-09-22", 10], ["2026-09-29", 6]]),
+      ],
+      competition: { results: { "2026-09-21": "adam" }, ...(ranks ? { ranks } : {}) },
+    });
+    const ADAM_SILVER = { adam: { rank: "silver" as const, streak: 13 }, jp: { rank: null, streak: 1 } };
+    const BOTH = { adam: { rank: "silver" as const, streak: 13 }, jp: { rank: "bronze" as const, streak: 5 } };
+    /** Timeouts go fake only once the page is up: the load's own waits need real ones. */
+    const fakeTimers = () => vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], now: NOW });
+    const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+    const row = (id: string) => within(screen.getByTestId(`row-${id}`));
+
+    it("names a rank-up on the pill and holds the old rank until it plays", async () => {
+      crewReplies.push(ranked(ADAM_SILVER));
+      await mount();
+      expect(await screen.findByTestId("moment-pill")).toHaveTextContent("🛡 Adam reached Gold");
+      expect(row("adam").getByTestId("frame-silver")).toBeTruthy();
+      expect(row("adam").getAllByText("13").length).toBeGreaterThan(0);
+    });
+
+    it("plays the rank-up on the board, then shows the new rank", async () => {
+      crewReplies.push(ranked(ADAM_SILVER));
+      await mount();
+      const pill = await screen.findByTestId("moment-pill");
+      fakeTimers();
+      fireEvent.click(pill);
+      expect(competitionPosts().some((b) => b.ranks?.adam?.rank === "gold" && b.ranks.adam.streak === 14)).toBe(true);
+      advance(3400);
+      expect(row("adam").getByTestId("frame-gold")).toBeTruthy();
+      expect(row("adam").getAllByText("14").length).toBeGreaterThan(0);
+      expect(playChing).toHaveBeenCalled();
+    });
+
+    it("holds each row until its own moment plays", async () => {
+      crewReplies.push(ranked(BOTH));
+      await mount();
+      const pill = await screen.findByTestId("moment-pill");
+      expect(pill).toHaveTextContent("🛡 Adam reached Gold + 1 more");
+      fakeTimers();
+      fireEvent.click(pill);
+      advance(1800); // past Adam's swap
+      expect(row("jp").getByTestId("frame-bronze")).toBeTruthy();
+      expect(row("jp").getAllByText("5").length).toBeGreaterThan(0);
+      advance(1600); // Adam's moment ends; JP's crumble starts
+      advance(2000); // and ends
+      expect(row("jp").queryByTestId(/^frame-/)).toBeNull();
+      expect(row("jp").queryAllByText("5")).toHaveLength(0);
+    });
+
+    it("shows the sound hint once", async () => {
+      crewReplies.push(ranked(ADAM_SILVER));
+      await mount();
+      expect(await screen.findByTestId("sound-hint")).toHaveTextContent("🔊 These have sound, turn it up");
+      fireEvent.click(screen.getByTestId("moment-pill"));
+      expect(localStorage.getItem("anki-crew:sound-hint")).not.toBeNull();
+      cleanup();
+      crewReplies.push(ranked(ADAM_SILVER));
+      await mount();
+      expect(await screen.findByTestId("moment-pill")).toBeTruthy();
+      expect(screen.queryByTestId("sound-hint")).toBeNull();
+    });
+
+    it("a first visit records ranks without a pill", async () => {
+      crewReplies.push(ranked(undefined));
+      await mount();
+      await waitFor(() => expect(competitionPosts().length).toBeGreaterThan(0));
+      expect(screen.queryByTestId("moment-pill")).toBeNull();
+      expect(competitionPosts()[0].ranks.adam).toEqual({ rank: "gold", streak: 14 });
+    });
   });
 
   it("opens a player card from a board avatar", async () => {

@@ -8,6 +8,14 @@ export type Note = { id: string; date: string; title: string; items: string[] };
 
 export const NOTES: Note[] = [
   {
+    id: "2026-11-ranks",
+    date: "November 2026",
+    title: "Streak ranks",
+    items: [
+      "Your streak's a rank now — Bronze at 3 days up to Diamond at 100. Rank up and the crew sees it; let it slip and it crumbles. Win a week at Silver or better and you get a banner.",
+    ],
+  },
+  {
     id: "2026-09-weekly",
     date: "September 2026",
     title: "Win the week",

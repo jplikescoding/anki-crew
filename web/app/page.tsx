@@ -13,20 +13,21 @@ import WeekStrip from "@/app/components/WeekStrip";
 import WeeklyRoundup from "@/app/components/WeeklyRoundup";
 import WhatsNew from "@/app/components/WhatsNew";
 import { Avatar, AvatarUploader, PersonCard } from "@/app/components/Avatar";
-import { champion, finishedResults, type WeekResult } from "@/lib/competition";
+import { champion, crewWeek, finishedResults, type WeekResult } from "@/lib/competition";
 import { lookFrom } from "@/lib/metrics";
-import { ackPatch, pendingMoments, silentPatch, type Moment } from "@/lib/moments";
+import { ackPatch, heldStreaks, isRankMoment, pendingMoments, silentPatch, type Moment } from "@/lib/moments";
 import { newNotesFor, settleNote } from "@/lib/notes";
 import { readSeen, writeSeen, type Seen } from "@/lib/seen";
 import { playCelebration } from "@/lib/sound";
 import { FLOOR, NOTES_SEEN, mergeSeen, unreadCount, type SeenMap } from "@/lib/unread";
 import { NOTES, markNotesSeen, notesOnArrival, type Note } from "@/lib/whatsNew";
-import type { CompetitionState, CrewNote, CrewResponse, Engagement, FieldMap, Look, NoteCard, PersonView } from "@/lib/types";
+import type { CompetitionState, CrewNote, CrewResponse, Engagement, FieldMap, Look, NoteCard, PersonView, Rank } from "@/lib/types";
 
 type Tab = "board" | "feed" | "notes" | "you";
 const TABS: Tab[] = ["board", "feed", "notes", "you"];
 const RANGES: Range[] = ["today", "week", "all"];
 const HINT_KEY = "anki-crew:hinted:v1";
+const SOUND_HINT_KEY = "anki-crew:sound-hint";
 const LOOK_KEY = "anki-crew:look:v1";
 const BAD_LINK = "That link isn't valid. Check the key on the end of the URL, or ask JP for yours.";
 
@@ -72,6 +73,13 @@ export default function Page() {
   const [roundup, setRoundup] = useState<{ result: WeekResult; late: boolean } | null>(null);
   const [celebrate, setCelebrate] = useState<{ id: string; tone: "gold" | "rose" } | null>(null);
   const [cardFor, setCardFor] = useState<string | null>(null);
+  // Streaks shown as last seen, per person, until their rank moment swaps them.
+  const [held, setHeld] = useState<Record<string, number>>({});
+  const [rankPlay, setRankPlay] = useState<
+    { id: string; kind: "rankUp" | "crumble"; from: Rank | null; to: Rank | null } | null
+  >(null);
+  // Starts true so the hint can't flash before storage has been read.
+  const [soundHinted, setSoundHinted] = useState(true);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -102,7 +110,9 @@ export default function Page() {
       try { sessionStorage.setItem(LOOK_KEY, JSON.stringify(look.current)); } catch { /* storage blocked */ }
       setResults(finished);
       setCompState(state);
-      setMoments(pendingMoments(next.people, next.viewer, state, finished));
+      const pending = pendingMoments(next.people, next.viewer, state, finished);
+      setMoments(pending);
+      setHeld(heldStreaks(state, pending));
       if (me) {
         // Best effort: a lost save only means a moment may show once more.
         void fetch(`/api/competition?key=${encodeURIComponent(key)}`, {
@@ -155,6 +165,7 @@ export default function Page() {
 
   useEffect(() => {
     try { if (!localStorage.getItem(HINT_KEY)) setHint(true); } catch { /* storage blocked */ }
+    try { if (!localStorage.getItem(SOUND_HINT_KEY)) setSoundHinted(false); } catch { /* storage blocked */ }
   }, []);
 
   /**
@@ -271,7 +282,8 @@ export default function Page() {
 
   /**
    * Plays queued moments one after another. A roundup waits for its Close; a
-   * pass sweeps your row, then moves on. The tap that started this is what
+   * rank moment plays over its row and moves on when it ends; a pass sweeps
+   * your row, then moves on. The tap that started this is what
    * lets the chime play at all.
    */
   const playNext = useCallback(function next() {
@@ -283,6 +295,11 @@ export default function Page() {
       if (m.result.winner === me) playCelebration();
       return;
     }
+    if (m.kind === "rankUp" || m.kind === "crumble") {
+      setTab("board");
+      setRankPlay({ id: m.id, kind: m.kind, from: m.from, to: m.to });
+      return;
+    }
     setTab("board");
     setRange("week");
     setCelebrate({ id: me, tone: m.kind === "passed" ? "gold" : "rose" });
@@ -290,15 +307,21 @@ export default function Page() {
     window.setTimeout(next, 1800);
   }, [data?.viewer]);
 
+  const soundHint = !soundHinted && moments.some(isRankMoment);
+
   const playMoments = useCallback(() => {
     if (!data) return;
+    if (soundHint) {
+      setSoundHinted(true);
+      try { localStorage.setItem(SOUND_HINT_KEY, "1"); } catch { /* storage blocked */ }
+    }
     queue.current = [...moments];
     setMoments([]);
     const patch = ackPatch(data.people, data.viewer, results);
     setCompState((s) => ({ ...s, results: { ...s.results, ...patch.results } }));
     void send("/api/competition", patch, "couldn't save that you've seen it");
     playNext();
-  }, [data, moments, results, send, playNext]);
+  }, [data, moments, results, send, playNext, soundHint]);
 
   // Everything but the roundup waits for it: until the latest week has been
   // shown, the crown, strip and trophies stay as they were before it.
@@ -455,7 +478,7 @@ export default function Page() {
 
       {tab === "board" && (
         <>
-          <MomentPill moments={moments} people={data.people} viewer={data.viewer} onPlay={playMoments} />
+          <MomentPill moments={moments} people={data.people} viewer={data.viewer} onPlay={playMoments} soundHint={soundHint} />
           <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-1 text-[11.5px]">
             <div className="flex gap-1">
               {RANGES.map((r) => (
@@ -490,8 +513,16 @@ export default function Page() {
               seen={seenTotals}
               look={look.current ?? null}
               champion={champion(shown)}
+              championWeek={shown.length > 0 ? crewWeek(shown[shown.length - 1].week) : undefined}
               celebrate={celebrate}
               onSelect={setCardFor}
+              held={held}
+              rankPlay={rankPlay}
+              onRankSwap={() => {
+                const id = rankPlay?.id;
+                if (id) setHeld((h) => { const rest = { ...h }; delete rest[id]; return rest; });
+              }}
+              onRankDone={() => { setRankPlay(null); playNext(); }}
             />
           </div>
           <StatTiles people={data.people} viewer={data.viewer} />
