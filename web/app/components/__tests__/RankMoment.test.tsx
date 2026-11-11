@@ -82,6 +82,21 @@ describe("RankMoment", () => {
     expect(playChing).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["rankUp", "silver", "gold", 3400],
+    ["crumble", "gold", null, 2000],
+  ] as const)("leaves nothing showing after a %s ends", (kind, from, to, ms) => {
+    const { container } = inRow(<RankMoment kind={kind} from={from} to={to} onSwap={() => {}} onDone={() => {}} />);
+    const row = container.firstElementChild as HTMLElement;
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(row).toHaveAttribute("data-rank-hold");
+
+    act(() => { vi.advanceTimersByTime(ms); });
+    const lit = Array.from(container.querySelectorAll<HTMLElement>("[data-part]")).filter((el) => el.style.opacity === "1");
+    expect(lit.map((el) => el.dataset.part)).toEqual([]);
+    expect(row).not.toHaveAttribute("data-rank-hold");
+  });
+
   it("stops its timers if it leaves early", () => {
     const onSwap = vi.fn();
     const onDone = vi.fn();

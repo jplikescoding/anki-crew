@@ -38,14 +38,15 @@ function ring(ctx: AudioContext): void {
 
 /**
  * A bright "ching" as the new crest lands: two sine partials an octave apart
- * (E6, E7) and a quiet shimmer above them, struck and left to ring out.
+ * (E6, E7) and a quiet shimmer above them, struck and left to ring out. They
+ * peak together, so together they sum to about ring()'s 0.11.
  */
 function ching(ctx: AudioContext): void {
   const now = ctx.currentTime;
   [
-    { f: 1318.5, peak: 0.1 },
-    { f: 2637, peak: 0.05 },
-    { f: 3951, peak: 0.015 },
+    { f: 1318.5, peak: 0.065 },
+    { f: 2637, peak: 0.032 },
+    { f: 3951, peak: 0.01 },
   ].forEach(({ f, peak }) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();

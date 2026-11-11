@@ -120,7 +120,14 @@ export function RankMoment({
     const animate = (el: Element | null, kf: Keyframe[], o: KeyframeAnimationOptions) => {
       if (el && typeof el.animate === "function") anims.push(el.animate(kf, o));
     };
-    const show = (el: HTMLElement | null, on: boolean) => { if (el) el.style.opacity = on ? "1" : "0"; };
+    // Everything shown here is hidden again in stop(): cancelling the fades alone
+    // would bring the old frame and the fallen pieces back.
+    const lit = new Set<HTMLElement>();
+    const show = (el: HTMLElement | null, on: boolean) => {
+      if (!el) return;
+      el.style.opacity = on ? "1" : "0";
+      if (on) lit.add(el);
+    };
     const run = `${kind}:${from}:${to}`;
     if (fired.current.run !== run) fired.current = { run, beats: new Set() };
     const beats = fired.current.beats;
@@ -133,6 +140,8 @@ export function RankMoment({
     const swap = () => once("swap", () => swapRef.current());
     const release = () => row.removeAttribute(HOLD);
     const stop = () => {
+      lit.forEach((el) => { el.style.opacity = "0"; });
+      lit.clear();
       timers.forEach((t) => window.clearTimeout(t));
       anims.forEach((a) => a.cancel());
       anims.length = 0;
