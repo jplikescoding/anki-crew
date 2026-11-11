@@ -73,4 +73,18 @@ describe("sound", () => {
     expect(FakeContext.made).toHaveLength(1);
   });
 
+  it("keeps the crumble quieter than the ching", async () => {
+    const { unlockSound, playChing, playCrumble } = await import("@/lib/sound");
+    unlockSound();
+    await Promise.resolve();
+    const ctx = FakeContext.made[0];
+    playChing();
+    const ching = ctx.peaks.reduce((a, b) => a + b, 0);
+    ctx.peaks = [];
+    playCrumble();
+    const crumble = ctx.peaks;
+    expect(crumble).toHaveLength(2);
+    for (const p of crumble) expect(p).toBeLessThanOrEqual(0.06);
+    expect(crumble.reduce((a, b) => a + b, 0)).toBeLessThan(ching);
+  });
 });

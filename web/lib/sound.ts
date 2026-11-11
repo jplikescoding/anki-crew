@@ -76,7 +76,8 @@ function ching(ctx: AudioContext): void {
 
 /**
  * Stone giving way: a short burst of noise, muffled as it falls (a lowpass
- * sweeping 900 -> 200 Hz), over a low, soft thump. Never harsh.
+ * sweeping 900 -> 200 Hz), over a low, soft thump. Never harsh: the two peak
+ * at 0.05 each, together just under the ching.
  */
 function crumble(ctx: AudioContext): void {
   const now = ctx.currentTime;
@@ -93,7 +94,7 @@ function crumble(ctx: AudioContext): void {
   filter.frequency.exponentialRampToValueAtTime(200, now + len);
   const hiss = ctx.createGain();
   hiss.gain.setValueAtTime(0, now);
-  hiss.gain.linearRampToValueAtTime(0.09, now + 0.02);
+  hiss.gain.linearRampToValueAtTime(0.05, now + 0.02);
   hiss.gain.exponentialRampToValueAtTime(0.0001, now + len);
   noise.connect(filter).connect(hiss).connect(ctx.destination);
   noise.start(now);
@@ -104,7 +105,7 @@ function crumble(ctx: AudioContext): void {
   thump.type = "sine";
   thump.frequency.value = 70;
   body.gain.setValueAtTime(0, now);
-  body.gain.linearRampToValueAtTime(0.09, now + 0.01);
+  body.gain.linearRampToValueAtTime(0.05, now + 0.01);
   body.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
   thump.connect(body).connect(ctx.destination);
   thump.start(now);
