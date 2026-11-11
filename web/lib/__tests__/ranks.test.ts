@@ -35,6 +35,8 @@ describe("bannerColors", () => {
   });
   it("gives two colors from Silver up", () => {
     expect(bannerColors("silver")).toEqual(["#5b21b6", "#2e1065"]);
+    expect(bannerColors("gold")).toEqual(["#1e3a8a", "#0b1437"]);
+    expect(bannerColors("platinum")).toEqual(["#047857", "#022c22"]);
     expect(bannerColors("diamond")).toEqual(["#27272a", "#09090b"]);
   });
 });

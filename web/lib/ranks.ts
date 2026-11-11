@@ -42,8 +42,8 @@ export function shownRank(p: PersonView): ShownRank {
 const BANNER: Record<Rank, [string, string] | null> = {
   bronze: null,
   silver: ["#5b21b6", "#2e1065"],
-  gold: ["#b45309", "#451a03"],
-  platinum: ["#0e7490", "#083344"],
+  gold: ["#1e3a8a", "#0b1437"],
+  platinum: ["#047857", "#022c22"],
   diamond: ["#27272a", "#09090b"],
 };
 
